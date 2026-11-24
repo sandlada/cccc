@@ -18,6 +18,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             this.dispatcher = dispatcher ?? Dispatcher.CurrentDispatcher;
             ApplyProfile();
             window = new ToastWindow(this.preferences.UseMaterial);
+            window.ApplyPersonalization(this.preferences);
             if (ToastProfile.Compact) TaskbarPlacement.RequestRefresh();
         }
 
@@ -62,6 +63,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                 if (window != null)
                 {
                     window.SetMaterialEnabled(preferences.UseMaterial);
+                    window.ApplyPersonalization(preferences);
                     window.RefreshAppearance();
                 }
             });
@@ -83,6 +85,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                 Themes.MaterialAvailable = false;
                 Themes.Refresh();
                 window = new ToastWindow(material);
+                window.ApplyPersonalization(preferences);
                 if (ToastProfile.Compact) TaskbarPlacement.RequestRefresh();
             });
         }
@@ -140,7 +143,13 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             {
                 ShowPreview = value.ShowPreview,
                 UseMaterial = value.UseMaterial,
-                Layout = value.Layout
+                Layout = value.Layout,
+                DisplayMode = value.DisplayMode,
+                CornerRadius = value.CornerRadius,
+                FullCornerRadius = value.FullCornerRadius,
+                Padding = value.Padding,
+                ShowBorder = value.ShowBorder,
+                ShowShadow = value.ShowShadow
             };
         }
     }

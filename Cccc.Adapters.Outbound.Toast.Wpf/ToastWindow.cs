@@ -15,6 +15,7 @@ using Cccc.Platform.Windows;
 using Cccc.Application;
 using Cccc.Domain.Feedback;
 using Cccc.MaterialShape;
+using Cccc.Domain.Preferences;
 
 namespace Cccc.Adapters.Outbound.Toast.Wpf
 {
@@ -22,9 +23,16 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
     {
         internal static double OuterWidth { get { return CardBackgroundRenderer.LogicalWidth; } }
         internal static double OuterHeight { get { return CardBackgroundRenderer.LogicalHeight; } }
+        internal double ActiveOuterWidth { get { return ToastProfile.Compact ? CardBackgroundRenderer.LogicalWidth : baseCardWidth + (expandedCardWidth - baseCardWidth) * counterExpand.Progress + 64; } }
+        internal double ActiveOuterHeight { get { return maxOuterHeight; } }
         private readonly Grid surface;
         private readonly Grid counterContent;
+        private readonly Grid body;
+        private readonly ColumnDefinition iconCol, iconGapCol, textCol, counterCol;
+        private readonly StackPanel copyPanel;
         private readonly Image background;
+        private readonly Canvas backgroundSlices;
+        private readonly Image bgLeft, bgMiddle, bgRight;
         private readonly Border card, badge, counter;
         private readonly SampledText title, detail, symbol, times;
         private readonly SampledText[] glyphs;
@@ -35,9 +43,22 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
         private readonly DispatcherTimer hideTimer;
         private readonly CardBackgroundCache backgrounds = new CardBackgroundCache();
         private readonly CopyMotion motion = new CopyMotion();
+        private readonly CounterExpandMotion counterExpand = new CounterExpandMotion();
         private readonly TitleTransition titleTransition = new TitleTransition();
         private readonly WindowFade windowFade = new WindowFade();
         private readonly ScaleTransform countScale = new ScaleTransform(1, 1);
+        private ToastDisplayMode displayMode = ToastDisplayMode.Full;
+        private int cornerRadius = ToastAppearancePolicy.DefaultCornerRadius;
+        private bool fullCornerRadius;
+        private int cardPadding = ToastAppearancePolicy.DefaultPadding;
+        private bool showBorder = true;
+        private bool showShadow = true;
+        private int maxOuterWidth = CardBackgroundRenderer.LogicalWidth;
+        private int maxOuterHeight = CardBackgroundRenderer.LogicalHeight;
+        private double baseCardWidth = 298;
+        private double expandedCardWidth = 360;
+        private double cardHeight = 80;
+        private double resolvedCornerExtent = CardOutline.CornerExtent;
         private readonly BadgeShapeView badgeShape;
         private readonly MorphAnimator badgeMotion;
         private readonly MaterialShapeSequence badgeSequence;
@@ -125,20 +146,38 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
             TextOptions.SetTextRenderingMode(this, TextRenderingMode.Grayscale);
             TextOptions.SetTextHintingMode(this, TextHintingMode.Fixed);
-            surface = new Grid { Width = OuterWidth, Height = OuterHeight };
+            surface = new Grid { Width = maxOuterWidth, Height = maxOuterHeight };
             background = new Image { HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Top, Stretch = Stretch.Fill, SnapsToDevicePixels = true };
             RenderOptions.SetBitmapScalingMode(background, BitmapScalingMode.NearestNeighbor);
             surface.Children.Add(background);
+            backgroundSlices = new Canvas { HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top, Visibility = Visibility.Collapsed };
+            bgLeft = new Image { Stretch = Stretch.Fill, SnapsToDevicePixels = true };
+            bgMiddle = new Image { Stretch = Stretch.Fill, SnapsToDevicePixels = true };
+            bgRight = new Image { Stretch = Stretch.Fill, SnapsToDevicePixels = true };
+            RenderOptions.SetBitmapScalingMode(bgLeft, BitmapScalingMode.NearestNeighbor);
+            RenderOptions.SetBitmapScalingMode(bgMiddle, BitmapScalingMode.NearestNeighbor);
+            RenderOptions.SetBitmapScalingMode(bgRight, BitmapScalingMode.NearestNeighbor);
+            backgroundSlices.Children.Add(bgLeft);
+            backgroundSlices.Children.Add(bgMiddle);
+            backgroundSlices.Children.Add(bgRight);
+            surface.Children.Add(backgroundSlices);
             // Transparent content host. All card pixels are in the background layer;
             // no parent Effect; each text element owns its four-times glyph cache.
-            card = new Border { Margin = new Thickness(32), Padding = new Thickness(1) };
+            card = new Border { Margin = new Thickness(32), Padding = new Thickness(1),
+                HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
+                ClipToBounds = true };
             bool compact = ToastProfile.Compact;
-            Grid body = new Grid { Margin = compact ? new Thickness(6, 0, 5, 0) : new Thickness(17, 0, 15, 0) };
-            body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(compact ? 18 : 34) });
-            body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(compact ? 8 : 13) });
-            body.ColumnDefinitions.Add(new ColumnDefinition { Width = compact ? new GridLength(1, GridUnitType.Star) : new GridLength(211) });
-            body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(compact ? 44 : 68) });
+            body = new Grid { Margin = compact ? new Thickness(6, 0, 5, 0) : new Thickness(19, 0, 15, 0) };
+            iconCol = new ColumnDefinition { Width = new GridLength(compact ? 18 : 34) };
+            iconGapCol = new ColumnDefinition { Width = new GridLength(compact ? 8 : 13) };
+            textCol = new ColumnDefinition { Width = compact ? new GridLength(1, GridUnitType.Star) : new GridLength(211) };
+            counterCol = new ColumnDefinition { Width = new GridLength(compact ? 44 : 68) };
+            body.ColumnDefinitions.Add(iconCol);
+            body.ColumnDefinitions.Add(iconGapCol);
+            body.ColumnDefinitions.Add(textCol);
+            body.ColumnDefinitions.Add(counterCol);
             badge = new Border { Width = compact ? 18 : 32, Height = compact ? 18 : 32,
                 VerticalAlignment = VerticalAlignment.Center };
             badgeShape = new BadgeShapeView(compact ? 18 : 32) { Fill = Brush("#15976B") };
@@ -163,7 +202,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             badgeVisuals.Children.Add(badgeShape);
             badgeVisuals.Children.Add(badgeContent);
             badge.Child = badgeVisuals; body.Children.Add(badge);
-            StackPanel copy = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            copyPanel = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             title = new SampledText(textPixels) { FontSize = 14, FontWeight = EmbeddedFonts.TitleWeight,
                 Foreground = Brush("#1D1D1F"), TextTrimming = TextTrimming.CharacterEllipsis,
                 TextWrapping = TextWrapping.NoWrap };
@@ -171,8 +210,8 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                 Margin = new Thickness(0, 4, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis,
                 TextWrapping = TextWrapping.NoWrap };
             if (compact) detail.Visibility = Visibility.Collapsed;
-            copy.Children.Add(title); copy.Children.Add(detail);
-            Grid.SetColumn(copy, 2); body.Children.Add(copy);
+            copyPanel.Children.Add(title); copyPanel.Children.Add(detail);
+            Grid.SetColumn(copyPanel, 2); body.Children.Add(copyPanel);
             counter = new Border { CornerRadius = new CornerRadius(compact ? 10 : 9), Background = Brush("#E9E9ED"),
                 Padding = compact ? new Thickness(0) : new Thickness(4, 5, 4, 5), Margin = new Thickness(8, 0, 0, 0),
                 Width = compact ? 36 : 48, Height = compact ? 20 : 28, HorizontalAlignment = HorizontalAlignment.Right,
@@ -223,6 +262,147 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             };
             hideTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
             hideTimer.Tick += delegate { FadeOut(); };
+            RecalculateCardGeometry();
+        }
+
+        internal void ApplyPersonalization(PreferencesModel preferences)
+        {
+            if (closed || preferences == null) return;
+            displayMode = (ToastDisplayMode)preferences.DisplayMode;
+            cornerRadius = preferences.CornerRadius;
+            fullCornerRadius = preferences.FullCornerRadius;
+            cardPadding = preferences.Padding;
+            showBorder = preferences.ShowBorder;
+            showShadow = preferences.ShowShadow;
+            RecalculateCardGeometry();
+            if (windowHandle != IntPtr.Zero) Position(anchorWindow);
+            if (IsVisible && Current != null) PrepareVisibleText();
+        }
+
+        private void RecalculateCardGeometry()
+        {
+            if (ToastProfile.Compact)
+            {
+                maxOuterWidth = CardBackgroundRenderer.LogicalWidth;
+                maxOuterHeight = CardBackgroundRenderer.LogicalHeight;
+                baseCardWidth = 225;
+                expandedCardWidth = 225;
+                cardHeight = 32;
+                resolvedCornerExtent = ToastAppearancePolicy.ResolveCornerRadius(
+                    cornerRadius, fullCornerRadius, 225, 32);
+                Width = maxOuterWidth;
+                Height = maxOuterHeight;
+                surface.Width = maxOuterWidth;
+                surface.Height = maxOuterHeight;
+                card.Width = 225;
+                card.Height = 32;
+                badge.Visibility = Visibility.Visible;
+                title.Visibility = Visibility.Visible;
+                detail.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            bool showIcon = ToastDisplayPolicy.ShowsIcon(displayMode);
+            bool showLabel = ToastDisplayPolicy.ShowsLabel(displayMode);
+            bool showContent = ToastDisplayPolicy.ShowsContent(displayMode);
+            int pad = ToastAppearancePolicy.ClampPadding(cardPadding);
+
+            double iconW = showIcon ? 34 : 0;
+            double gapW = showIcon && (showLabel || showContent) ? 13 : 0;
+            double textW = showContent ? 211 : (showLabel ? 84 : 0);
+            double contentH = (showLabel && showContent) ? 40 : (showLabel ? 22 : (showContent ? 18 : 32));
+            cardHeight = Math.Max(contentH + 2 * pad, showIcon ? 32 + 2 * pad : 24 + 2 * pad);
+
+            double bodyPadLeft = Math.Max(2, pad - 1);
+            double bodyPadRight = Math.Max(2, pad - 1);
+            double defaultBase = bodyPadLeft + 1 + iconW + gapW + textW + bodyPadRight + 1;
+            // Keep default Full mode at 360x80 (424x144 outer) for exact parity.
+            double counterSlot = (displayMode == ToastDisplayMode.Full && pad == ToastAppearancePolicy.DefaultPadding)
+                ? 360 - defaultBase
+                : 62;
+            baseCardWidth = defaultBase;
+            expandedCardWidth = baseCardWidth + counterSlot;
+            resolvedCornerExtent = ToastAppearancePolicy.ResolveCornerRadius(
+                cornerRadius, fullCornerRadius, baseCardWidth, cardHeight);
+
+            maxOuterWidth = (int)Math.Ceiling(expandedCardWidth) + 64;
+            maxOuterHeight = (int)Math.Ceiling(cardHeight) + 64;
+
+            Width = maxOuterWidth;
+            Height = maxOuterHeight;
+            surface.Width = maxOuterWidth;
+            surface.Height = maxOuterHeight;
+            card.Height = cardHeight;
+            body.Margin = new Thickness(bodyPadLeft, 0, bodyPadRight, 0);
+            iconCol.Width = new GridLength(iconW);
+            iconGapCol.Width = new GridLength(gapW);
+            textCol.Width = new GridLength(textW);
+            counterCol.Width = new GridLength(counterSlot);
+
+            badge.Visibility = showIcon ? Visibility.Visible : Visibility.Collapsed;
+            copyPanel.Visibility = (showLabel || showContent) ? Visibility.Visible : Visibility.Collapsed;
+            title.Visibility = showLabel ? Visibility.Visible : Visibility.Collapsed;
+            detail.Visibility = showContent ? Visibility.Visible : Visibility.Collapsed;
+            detail.Margin = showLabel ? new Thickness(0, 4, 0, 0) : new Thickness(0);
+
+            ApplyCardWidthFrame();
+        }
+
+        private void ApplyCardWidthFrame()
+        {
+            if (ToastProfile.Compact)
+            {
+                card.Width = 225;
+                counter.Opacity = Current != null && Current.Count >= 2 ? 1 : 0;
+                background.Opacity = 1;
+                backgroundSlices.Visibility = Visibility.Collapsed;
+                return;
+            }
+            double p = counterExpand.Progress;
+            double currentCardW = baseCardWidth + (expandedCardWidth - baseCardWidth) * p;
+            double currentOuterW = currentCardW + 64;
+            card.Width = currentCardW;
+            counter.Opacity = p <= 0.01 ? 0 : Math.Clamp((p - 0.1) / 0.9, 0, 1);
+
+            if (HasNativeMaterial)
+            {
+                background.Opacity = 1;
+                backgroundSlices.Visibility = Visibility.Collapsed;
+                try { acrylic.UpdateCardWidth(currentOuterW, resolvedCornerExtent); }
+                catch (Exception error) { MaterialFault(error); }
+            }
+            else if (CurrentBackground != null && CurrentBackground.LeftSlice != null &&
+                     currentCardW < expandedCardWidth - 0.05)
+            {
+                double visualScale = VisualTreeHelper.GetDpi(this).DpiScaleX;
+                if (visualScale <= 0) visualScale = 1;
+                double leftW = CurrentBackground.LeftSliceWidth / visualScale;
+                double rightW = CurrentBackground.RightSliceWidth / visualScale;
+                double frameH = CurrentBackground.Height / visualScale;
+                double midW = Math.Max(0, currentOuterW - leftW - rightW);
+
+                bgLeft.Source = CurrentBackground.LeftSlice;
+                bgLeft.Width = leftW; bgLeft.Height = frameH;
+                Canvas.SetLeft(bgLeft, 0); Canvas.SetTop(bgLeft, 0);
+
+                bgMiddle.Source = CurrentBackground.MiddleSlice;
+                bgMiddle.Width = midW; bgMiddle.Height = frameH;
+                Canvas.SetLeft(bgMiddle, leftW); Canvas.SetTop(bgMiddle, 0);
+
+                bgRight.Source = CurrentBackground.RightSlice;
+                bgRight.Width = rightW; bgRight.Height = frameH;
+                Canvas.SetLeft(bgRight, leftW + midW); Canvas.SetTop(bgRight, 0);
+
+                backgroundSlices.Width = currentOuterW;
+                backgroundSlices.Height = frameH;
+                background.Opacity = 0;
+                backgroundSlices.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                background.Opacity = 1;
+                backgroundSlices.Visibility = Visibility.Collapsed;
+            }
         }
 
         private void SetContent(FeedbackView value, bool preview)
@@ -354,10 +534,14 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                 ? new CappedCount(count).Format()
                 : countText;
             SetContent(Current, preview);
+            bool wantsCounter = count >= 2;
+            counterExpand.AnimateTo(wantsCounter ? 1 : 0, lastCopySignal);
+            ApplyCardWidthFrame();
             Position(foreground);
             PrepareVisibleText();
             hideTimer.Stop();
             if (repeat) PlayHit(); else RestoreFade();
+            if (counterExpand.Running) StartFrames();
             StartHideTimer();
         }
 
@@ -374,8 +558,8 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             preparing = true;
             try
             {
-                surface.Measure(new Size(OuterWidth, OuterHeight));
-                surface.Arrange(new Rect(0, 0, OuterWidth, OuterHeight));
+                surface.Measure(new Size(maxOuterWidth, maxOuterHeight));
+                surface.Arrange(new Rect(0, 0, maxOuterWidth, maxOuterHeight));
                 surface.UpdateLayout();
                 foreach (SampledText text in glyphs)
                 {
@@ -415,6 +599,10 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             bool animateTitle = alreadyVisible && !(Current != null && Current.Kind == FeedbackViewKind.Status && value.Kind != FeedbackViewKind.Status);
             if (!alreadyVisible) { Opacity = 0; windowFade.Reset(0); }
             SetContent(value, preview);
+            bool wantsCounter = value.Kind != FeedbackViewKind.Status && value.Count >= 2;
+            if (!alreadyVisible) counterExpand.Snap(wantsCounter ? 1 : 0);
+            else counterExpand.AnimateTo(wantsCounter ? 1 : 0, WindowsNativeMethods.MonotonicMilliseconds);
+            ApplyCardWidthFrame();
             UpdateTitle(value.Title, animateTitle);
             // Position and build for the real target DPI while the new card is hidden.
             Position(value.Foreground == null ? IntPtr.Zero : new IntPtr(value.Foreground.Handle));
@@ -446,12 +634,13 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
         private void ApplyBackground(int dpi, double visualScale)
         {
             LayoutCounter();
-            BackgroundFrame frame = backgrounds.Get(dpi);
+            BackgroundFrame frame = backgrounds.Get(dpi, maxOuterWidth, maxOuterHeight,
+                resolvedCornerExtent, showBorder, showShadow);
             background.Visibility = Visibility.Visible;
             if (HasNativeMaterial)
             {
                 try { acrylic.SetBackground(frame); background.Visibility = Visibility.Hidden; }
-                catch (Exception error) { MaterialFault(error); frame = backgrounds.Get(dpi); }
+                catch (Exception error) { MaterialFault(error); frame = backgrounds.Get(dpi, maxOuterWidth, maxOuterHeight, resolvedCornerExtent, showBorder, showShadow); }
             }
             background.Source = frame.Bitmap;
             // WPF device scaling * this logical extent equals exact bitmap pixels.
@@ -459,6 +648,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             background.Width = frame.Width / visualScale;
             background.Height = frame.Height / visualScale;
             CurrentBackground = frame;
+            ApplyCardWidthFrame();
         }
 
         internal void Position(IntPtr foreground)
@@ -477,7 +667,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                         0x0001 | 0x0004 | 0x0010 | 0x0200);
                 int dpi = EffectiveDpi();
                 double scale = dpi / 96.0;
-                int width = (int)Math.Round(OuterWidth * scale), height = (int)Math.Round(OuterHeight * scale);
+                int width = (int)Math.Round(maxOuterWidth * scale), height = (int)Math.Round(maxOuterHeight * scale);
                 int x = info.Work.Left + (int)Math.Round(-12 * scale);
                 int y = info.Work.Bottom - height + (int)Math.Round(12 * scale);
                 if (ToastProfile.Compact)
@@ -494,7 +684,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                 }
                 if (PreviewPositionProvider != null)
                 {
-                    Point? previewPosition = PreviewPositionProvider(new Size(OuterWidth, OuterHeight));
+                    Point? previewPosition = PreviewPositionProvider(new Size(maxOuterWidth, maxOuterHeight));
                     if (previewPosition.HasValue)
                     {
                         x = (int)Math.Round(previewPosition.Value.X * scale);
@@ -505,7 +695,8 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                 {
                     try
                     {
-                        acrylic.Position(x, y, width, height, dpi);
+                        double currentCardW = ToastProfile.Compact ? 225 : baseCardWidth + (expandedCardWidth - baseCardWidth) * counterExpand.Progress;
+                        acrylic.Position(x, y, width, height, dpi, resolvedCornerExtent, currentCardW + 64);
                     }
                     catch (Exception error) { MaterialFault(error); }
                 }
@@ -610,6 +801,9 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             if (TestFrameObserved != null) TestFrameObserved(now, started && preparedRevision == revision);
             double value = motion.Value(now);
             titleTransition.Advance(now); ApplyTitleFrame();
+            bool expandWasRunning = counterExpand.Running;
+            counterExpand.Advance(now);
+            if (expandWasRunning || counterExpand.Running) ApplyCardWidthFrame();
             countScale.ScaleX = countScale.ScaleY = 1 + CopyMotion.CounterAmount * value;
             if (windowFade.Running)
             {
@@ -623,7 +817,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             }
             times.Moving = motion.Running;
             if (!motion.Running && !badgeMotion.IsRunning && !windowFade.Running &&
-                !titleTransition.Running && !pendingHit && !pendingEntrance) StopFrames();
+                !titleTransition.Running && !counterExpand.Running && !pendingHit && !pendingEntrance) StopFrames();
         }
 
         internal void HideAndClear()
@@ -631,7 +825,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             deferredPulse = pendingEntrance = pendingHit = false;
             revision++;
             hideTimer.Stop();
-            windowFade.Reset(0); motion.Stop(); StopFrames();
+            windowFade.Reset(0); motion.Stop(); counterExpand.Snap(0); StopFrames();
             titleTransition.Reset(""); ApplyTitleFrame();
             badgeShape.StopAmbientSpin();
             badgeSequence.Reset();
@@ -674,10 +868,11 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                 double scale = dpi / 96.0;
                 VisualTreeHelper.SetRootDpi(exporter.surface, new DpiScale(scale, scale));
                 exporter.SetContent(sample, preview);
+                exporter.counterExpand.Snap(sample.Count >= 2 ? 1 : 0);
                 exporter.UpdateTitle(sample.Title, false);
                 exporter.ApplyBackground(dpi, scale);
-                exporter.surface.Measure(new Size(OuterWidth, OuterHeight));
-                exporter.surface.Arrange(new Rect(0, 0, OuterWidth, OuterHeight));
+                exporter.surface.Measure(new Size(exporter.maxOuterWidth, exporter.maxOuterHeight));
+                exporter.surface.Arrange(new Rect(0, 0, exporter.maxOuterWidth, exporter.maxOuterHeight));
                 exporter.surface.UpdateLayout();
                 BackgroundFrame frame = exporter.CurrentBackground;
                 RenderTargetBitmap bitmap = new RenderTargetBitmap(frame.Width, frame.Height, dpi, dpi, PixelFormats.Pbgra32);
@@ -716,9 +911,11 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             VisualTreeHelper.SetRootDpi(surface, new DpiScale(scale, scale));
             SetContent(new FeedbackView { Kind = FeedbackViewKind.Confirmed, Title = FeedbackEngine.SuccessTitle(count),
                 Preview = "保持固定的预览文字", Count = count, CountText = new CappedCount(count).Format() }, true);
+            counterExpand.Snap(count >= 2 ? 1 : 0);
+            ApplyCardWidthFrame();
             UpdateTitle(Current.Title, false);
-            surface.Measure(new Size(OuterWidth, OuterHeight));
-            surface.Arrange(new Rect(0, 0, OuterWidth, OuterHeight)); surface.UpdateLayout();
+            surface.Measure(new Size(maxOuterWidth, maxOuterHeight));
+            surface.Arrange(new Rect(0, 0, maxOuterWidth, maxOuterHeight)); surface.UpdateLayout();
             return new LayoutSnapshot { Badge = MeasureBounds(badge), Title = MeasureBounds(title), Detail = MeasureBounds(detail),
                 Counter = MeasureBounds(counter), Group = MeasureBounds(counterContent), Number = MeasureBounds(times),
                 NumberText = times.Text,

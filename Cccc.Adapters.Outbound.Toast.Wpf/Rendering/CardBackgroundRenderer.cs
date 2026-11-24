@@ -15,14 +15,23 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
 
         internal static BackgroundFrame Build(int dpi)
         {
+            return Build(dpi, LogicalWidth, LogicalHeight, CardOutline.CornerExtent, true, true);
+        }
+
+        internal static BackgroundFrame Build(int dpi, int logicalWidth, int logicalHeight,
+            double cornerExtent, bool showBorder, bool showShadow)
+        {
             if (dpi <= 0 || dpi > 960) throw new ArgumentOutOfRangeException("dpi");
             Stopwatch watch = Stopwatch.StartNew();
             double scale = dpi / 96.0;
-            int width = (int)Math.Round(LogicalWidth * scale), height = (int)Math.Round(LogicalHeight * scale);
+            int width = (int)Math.Round(logicalWidth * scale), height = (int)Math.Round(logicalHeight * scale);
             int highWidth = width * Sampling, highHeight = height * Sampling;
             int margin = (int)Math.Round(32 * scale);
             Rect bounds = new Rect(margin + .5, margin + .5, width - 2 * margin - 1, height - 2 * margin - 1);
-            Geometry outline = CardOutline.Create(bounds, scale);
+            double effectiveCorner = ToastProfile.Compact && Math.Abs(cornerExtent - CardOutline.CornerExtent) < 0.001
+                ? bounds.Height / 2 / scale
+                : Math.Min(Math.Max(0, cornerExtent), Math.Min(bounds.Width, bounds.Height) / 2 / scale);
+            Geometry outline = CardOutline.Create(bounds, scale, effectiveCorner);
             bool taskbarBlend = ToastProfile.Compact && Themes.MaterialEnabled && Themes.Current.Transparent;
             double taskbarShadow = taskbarBlend ? Themes.Current.TaskbarShadow : 0;
 
@@ -42,9 +51,13 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                     color.A = (byte)Math.Round(255 * Themes.Current.TaskbarTint);
                 }
                 SolidColorBrush fill = new SolidColorBrush(color); fill.Freeze();
-                SolidColorBrush line = new SolidColorBrush((Color)ColorConverter.ConvertFromString(Themes.Current.Rim)); line.Freeze();
-                Pen pen = new Pen(line, 1); pen.Freeze();
-                draw.DrawGeometry(fill, ToastProfile.Compact ? null : pen, outline);
+                Pen pen = null;
+                if (showBorder && !ToastProfile.Compact)
+                {
+                    SolidColorBrush line = new SolidColorBrush((Color)ColorConverter.ConvertFromString(Themes.Current.Rim)); line.Freeze();
+                    pen = new Pen(line, 1); pen.Freeze();
+                }
+                draw.DrawGeometry(fill, pen, outline);
             }
             RenderTargetBitmap high = new RenderTargetBitmap(highWidth, highHeight, 192, 192, PixelFormats.Pbgra32);
             high.Render(visual);
@@ -56,7 +69,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             // sigma=3 logical pixels with the existing 15% shadow opacity.
             // The compact light surface uses the separately selected weak shadow.
             // Running sums make each blur pass O(pixel count), independent of DPI.
-            bool drawShadow = !ToastProfile.Compact || taskbarShadow > 0;
+            bool drawShadow = showShadow && (!ToastProfile.Compact || taskbarShadow > 0);
             byte[] alpha = drawShadow ? new byte[highWidth * highHeight] : null;
             byte[] temporary = drawShadow ? new byte[alpha.Length] : null;
             double coverageTint = taskbarBlend ? Themes.Current.TaskbarTint : (Themes.UseAcrylic ? Themes.Current.Tint : 1);
@@ -69,9 +82,11 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             // Match the tuning preview's weak vertical shadow: 0px 2px 7px.
             // The existing separable blur is a software approximation of that
             // browser blur, cached once per appearance/DPI, never per frame.
+            double shadowStrength = !drawShadow ? 0 : (ToastProfile.Compact ? taskbarShadow : .15);
             byte[] pixels = ToastProfile.Compact ? CompositeAndDownsample(body, alpha, highWidth, highHeight,
-                0, (int)Math.Round(2 * scale * Sampling), taskbarShadow, coverageTint) :
-                CompositeAndDownsample(body, alpha, highWidth, highHeight, offset);
+                0, (int)Math.Round(2 * scale * Sampling), shadowStrength, coverageTint) :
+                CompositeAndDownsample(body, alpha, highWidth, highHeight, offset, offset, shadowStrength,
+                    Themes.UseAcrylic ? Themes.Current.Tint : 1);
             // 1.2% extra grain, cached with the background. Preserve premultiplied
             // alpha and avoid affecting the transparent shadow outside the card.
             for (int y = margin + 2; !ToastProfile.Compact && Themes.UseAcrylic && y < height - margin - 2; y++)
@@ -83,9 +98,32 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                     for (int channel = 0; channel < 3; channel++) pixels[p + channel] = (byte)Math.Max(0, Math.Min(pixels[p + 3], Math.Round(pixels[p + channel] + grain)));
                 }
             BitmapSource bitmap = BitmapSource.Create(width, height, dpi, dpi, PixelFormats.Pbgra32, null, pixels, width * 4);
-            bitmap.Freeze(); watch.Stop();
-            return new BackgroundFrame { Bitmap = bitmap, Outline = outline, Dpi = dpi, Width = width,
-                Height = height, BuildMilliseconds = watch.Elapsed.TotalMilliseconds,
+            bitmap.Freeze();
+
+            BitmapSource leftSlice = null, middleSlice = null, rightSlice = null;
+            int leftSliceWidth = 0, rightSliceWidth = 0;
+            if (!ToastProfile.Compact)
+            {
+                int cornerPx = (int)Math.Ceiling(effectiveCorner * scale);
+                int capPx = Math.Min(width / 2 - 1, margin + cornerPx + 2);
+                if (capPx > 0 && capPx * 2 < width)
+                {
+                    leftSlice = new CroppedBitmap(bitmap, new Int32Rect(0, 0, capPx, height));
+                    leftSlice.Freeze();
+                    middleSlice = new CroppedBitmap(bitmap, new Int32Rect(capPx, 0, 1, height));
+                    middleSlice.Freeze();
+                    rightSlice = new CroppedBitmap(bitmap, new Int32Rect(width - capPx, 0, capPx, height));
+                    rightSlice.Freeze();
+                    leftSliceWidth = capPx;
+                    rightSliceWidth = capPx;
+                }
+            }
+
+            watch.Stop();
+            return new BackgroundFrame { Bitmap = bitmap, LeftSlice = leftSlice, MiddleSlice = middleSlice, RightSlice = rightSlice,
+                LeftSliceWidth = leftSliceWidth, RightSliceWidth = rightSliceWidth, Outline = outline, Dpi = dpi, Width = width,
+                Height = height, LogicalWidth = logicalWidth, LogicalHeight = logicalHeight, CornerExtent = effectiveCorner,
+                ShowBorder = showBorder, ShowShadow = showShadow, BuildMilliseconds = watch.Elapsed.TotalMilliseconds,
                 HighBufferBytes = body.Length, Dark = Themes.Current.Dark, Acrylic = Themes.UseAcrylic,
                 Compact = ToastProfile.Compact, TaskbarBlend = ToastProfile.Compact && Themes.MaterialEnabled && Themes.Current.Transparent };
         }

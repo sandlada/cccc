@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Security;
 using Cccc.Application;
@@ -33,6 +34,20 @@ namespace Cccc.Adapters.Outbound.Windows
                     else if (line == "material=on") result.Model.UseMaterial = true;
                     else if (includeLayout && line == "layout=card") result.Model.Layout = LayoutMode.Card;
                     else if (includeLayout && line == "layout=taskbar") result.Model.Layout = LayoutMode.Taskbar;
+                    else if (line.StartsWith("display=", StringComparison.Ordinal))
+                        result.Model.DisplayMode = ParseDisplayMode(line.Substring("display=".Length));
+                    else if (line.StartsWith("corner_radius=", StringComparison.Ordinal) &&
+                        int.TryParse(line.Substring("corner_radius=".Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out int cornerRadius))
+                        result.Model.CornerRadius = AppearanceBounds.ClampCornerRadius(cornerRadius);
+                    else if (line == "corner_full=on") result.Model.FullCornerRadius = true;
+                    else if (line == "corner_full=off") result.Model.FullCornerRadius = false;
+                    else if (line.StartsWith("padding=", StringComparison.Ordinal) &&
+                        int.TryParse(line.Substring("padding=".Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out int padding))
+                        result.Model.Padding = AppearanceBounds.ClampPadding(padding);
+                    else if (line == "border=on") result.Model.ShowBorder = true;
+                    else if (line == "border=off") result.Model.ShowBorder = false;
+                    else if (line == "shadow=on") result.Model.ShowShadow = true;
+                    else if (line == "shadow=off") result.Model.ShowShadow = false;
                 }
             }
             catch (IOException error) when (error is FileNotFoundException or DirectoryNotFoundException)
@@ -86,6 +101,12 @@ namespace Cccc.Adapters.Outbound.Windows
                 if (includeLayout)
                     text += (model.Layout == LayoutMode.Taskbar ? "layout=taskbar" : "layout=card") +
                         Environment.NewLine;
+                text += "display=" + FormatDisplayMode(model.DisplayMode) + Environment.NewLine +
+                    "corner_radius=" + AppearanceBounds.ClampCornerRadius(model.CornerRadius).ToString(CultureInfo.InvariantCulture) + Environment.NewLine +
+                    (model.FullCornerRadius ? "corner_full=on" : "corner_full=off") + Environment.NewLine +
+                    "padding=" + AppearanceBounds.ClampPadding(model.Padding).ToString(CultureInfo.InvariantCulture) + Environment.NewLine +
+                    (model.ShowBorder ? "border=on" : "border=off") + Environment.NewLine +
+                    (model.ShowShadow ? "shadow=on" : "shadow=off") + Environment.NewLine;
                 File.WriteAllText(temporary, text);
                 if (File.Exists(target)) File.Replace(temporary, target, null);
                 else File.Move(temporary, target);
@@ -105,6 +126,34 @@ namespace Cccc.Adapters.Outbound.Windows
                     catch (Exception error) when (error is IOException or UnauthorizedAccessException or SecurityException) { }
                 }
             }
+        }
+
+        private static DisplayMode ParseDisplayMode(string value)
+        {
+            return value switch
+            {
+                "icon" => DisplayMode.IconOnly,
+                "icon_label" => DisplayMode.IconAndLabel,
+                "icon_content" => DisplayMode.IconAndContent,
+                "label" => DisplayMode.LabelOnly,
+                "content" => DisplayMode.ContentOnly,
+                "label_content" => DisplayMode.LabelAndContent,
+                _ => DisplayMode.Full
+            };
+        }
+
+        private static string FormatDisplayMode(DisplayMode mode)
+        {
+            return mode switch
+            {
+                DisplayMode.IconOnly => "icon",
+                DisplayMode.IconAndLabel => "icon_label",
+                DisplayMode.IconAndContent => "icon_content",
+                DisplayMode.LabelOnly => "label",
+                DisplayMode.ContentOnly => "content",
+                DisplayMode.LabelAndContent => "label_content",
+                _ => "full"
+            };
         }
     }
 }

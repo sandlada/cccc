@@ -7,5 +7,11 @@ namespace Cccc.Application
         public bool ShowPreview = true;
         public bool UseMaterial = true;
         public LayoutMode Layout = LayoutMode.Card;
+        public DisplayMode DisplayMode = DisplayMode.Full;
+        public int CornerRadius = AppearanceBounds.DefaultCornerRadius;
+        public bool FullCornerRadius = false;
+        public int Padding = AppearanceBounds.DefaultPadding;
+        public bool ShowBorder = true;
+        public bool ShowShadow = true;
     }
 }

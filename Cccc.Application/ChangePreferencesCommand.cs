@@ -7,5 +7,11 @@ namespace Cccc.Application
         public bool? ShowPreview;
         public bool? UseMaterial;
         public LayoutMode? Layout;
+        public DisplayMode? DisplayMode;
+        public int? CornerRadius;
+        public bool? FullCornerRadius;
+        public int? Padding;
+        public bool? ShowBorder;
+        public bool? ShowShadow;
     }
 }

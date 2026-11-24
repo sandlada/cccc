@@ -65,12 +65,22 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
 
         internal static Geometry Create(Rect rect, double scale)
         {
-            if (ToastProfile.Compact)
+            return Create(rect, scale, CornerExtent);
+        }
+
+        internal static Geometry Create(Rect rect, double scale, double cornerExtentLogical)
+        {
+            if (ToastProfile.Compact && Math.Abs(cornerExtentLogical - CornerExtent) < 0.001)
             {
                 RectangleGeometry capsule = new RectangleGeometry(rect, rect.Height / 2, rect.Height / 2);
                 capsule.Freeze(); return capsule;
             }
-            double c = Math.Min(CornerExtent * scale, Math.Min(rect.Width, rect.Height) / 2);
+            double c = Math.Min(Math.Max(0, cornerExtentLogical) * scale, Math.Min(rect.Width, rect.Height) / 2);
+            if (c <= 0.01)
+            {
+                RectangleGeometry sharp = new RectangleGeometry(rect);
+                sharp.Freeze(); return sharp;
+            }
             List<Point> corner = Flatten(Controls(c), FlattenTolerance);
             StreamGeometry geometry = new StreamGeometry();
             using (StreamGeometryContext context = geometry.Open())

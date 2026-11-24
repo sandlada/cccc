@@ -208,6 +208,42 @@ namespace Cccc.Presentation.Verification
             finally { toast.Close(); }
         }
 
+        private static void CounterExpand()
+        {
+            CounterExpandMotion expand = new CounterExpandMotion();
+            expand.Snap(0);
+            Verify(expand.Progress == 0 && !expand.Running, "counterExpandStartsCollapsed");
+            expand.AnimateTo(1, 1000);
+            Verify(expand.Running, "counterExpandStartsOnRepeat");
+            expand.Advance(1000 + CounterExpandMotion.Duration / 2);
+            Verify(expand.Progress > 0.5 && expand.Progress < 1, "counterExpandEaseOutMidpoint");
+            expand.Advance(1000 + CounterExpandMotion.Duration);
+            Verify(expand.Progress == 1 && !expand.Running, "counterExpandFinishesAtDuration");
+
+            Themes.Current = new Appearance { Transparent = false }; Themes.MaterialAvailable = false;
+            ToastProfile.SetCompact(false);
+            ToastWindow toast = new ToastWindow(false);
+            Field<Grid>(toast, "surface").Opacity = 0;
+            try
+            {
+                toast.CopyPressed(1, IntPtr.Zero, true);
+                toast.Present(Sample(1), true);
+                Frame(toast);
+                Border card = Field<Border>(toast, "card");
+                double singleWidth = card.Width;
+                Verify(singleWidth < 310, "singleCopyLeavesNoCounterSpace width=" + singleWidth);
+
+                Pump(220);
+                toast.CopyPressed(2, IntPtr.Zero, true);
+                Frame(toast);
+                Pump(80);
+                Verify(card.Width > singleWidth && card.Width < 360, "repeatCopyExpandsHorizontally width=" + card.Width);
+                Pump(250);
+                Verify(Near(card.Width, 360) && Field<Border>(toast, "counter").Opacity == 1, "repeatCopySettlesExpanded");
+            }
+            finally { toast.Close(); }
+        }
+
         internal static void Run(string outputDirectory)
         {
             Fade();
@@ -215,6 +251,7 @@ namespace Cccc.Presentation.Verification
             RapidBurst();
             StatusHandoff();
             PreviewHooks();
+            CounterExpand();
             results.Add("TOTAL," + passed);
             File.WriteAllLines(Path.Combine(outputDirectory, "animation-check-results.csv"), results.ToArray());
             Console.WriteLine("Animation checks passed: " + passed);

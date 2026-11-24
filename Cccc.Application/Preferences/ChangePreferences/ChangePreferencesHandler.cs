@@ -1,3 +1,5 @@
+using Cccc.Domain.Preferences;
+
 namespace Cccc.Application
 {
     public sealed class ChangePreferencesHandler
@@ -15,6 +17,12 @@ namespace Cccc.Application
             if (command.ShowPreview is { } showPreview) model.ShowPreview = showPreview;
             if (command.UseMaterial is { } useMaterial) model.UseMaterial = useMaterial;
             if (command.Layout is { } layout) model.Layout = layout;
+            if (command.DisplayMode is { } displayMode) model.DisplayMode = displayMode;
+            if (command.CornerRadius is { } cornerRadius) model.CornerRadius = ToastAppearancePolicy.ClampCornerRadius(cornerRadius);
+            if (command.FullCornerRadius is { } fullCornerRadius) model.FullCornerRadius = fullCornerRadius;
+            if (command.Padding is { } padding) model.Padding = ToastAppearancePolicy.ClampPadding(padding);
+            if (command.ShowBorder is { } showBorder) model.ShowBorder = showBorder;
+            if (command.ShowShadow is { } showShadow) model.ShowShadow = showShadow;
 
             bool saved = preferences.Save(out string error);
             return new()

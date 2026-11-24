@@ -34,6 +34,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
         private readonly Windows.UI.Composition.ContainerVisual root;
         private readonly SpriteVisual visual, backgroundVisual;
         private readonly CompositionBitmap background;
+        private readonly CompositionNineGridBrush nineGridBrush;
         private readonly CompositionBackdropBrush backdrop;
         private CompositionEffectBrush blurBrush;
         private CompositionEffectFactory blurFactory;
@@ -41,6 +42,8 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
         private CompositionGeometricClip clip;
         private GeometrySource geometry;
         private int width, height, dpi;
+        private double cornerExtent = CardOutline.CornerExtent;
+        private double currentOuterLogicalWidth;
         private int left = Int32.MinValue, top = Int32.MinValue;
         private double lastScale = Double.NaN, lastOpacity = 0;
         private bool disposed;
@@ -70,7 +73,9 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                 visual = compositor.CreateSpriteVisual();
                 backgroundVisual = compositor.CreateSpriteVisual();
                 background = new CompositionBitmap(compositor);
-                backgroundVisual.Brush = background.Brush;
+                nineGridBrush = compositor.CreateNineGridBrush();
+                nineGridBrush.Source = background.Brush;
+                backgroundVisual.Brush = nineGridBrush;
                 root.Children.InsertAtBottom(visual);
                 root.Children.InsertAtTop(backgroundVisual);
                 backdrop = compositor.CreateHostBackdropBrush();
@@ -86,6 +91,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                     WindowsNativeMethods.SetWindowOwner(overlay, IntPtr.Zero);
                 if (target != null) target.Root = null;
                 if (backgroundVisual != null) { backgroundVisual.Brush = null; backgroundVisual.Dispose(); }
+                if (nineGridBrush != null) nineGridBrush.Dispose();
                 if (background != null) background.Dispose();
                 if (visual != null) visual.Dispose(); if (root != null) root.Dispose();
                 if (target != null) target.Dispose();
@@ -96,11 +102,21 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
 
         internal void Position(int x, int y, int pixelWidth, int pixelHeight, int targetDpi)
         {
+            Position(x, y, pixelWidth, pixelHeight, targetDpi, CardOutline.CornerExtent, 0);
+        }
+
+        internal void Position(int x, int y, int pixelWidth, int pixelHeight, int targetDpi, double targetCornerExtent, double activeOuterLogicalWidth)
+        {
             if (disposed) return;
             bool move = left != x || top != y, resize = width != pixelWidth || height != pixelHeight;
-            if (width != pixelWidth || height != pixelHeight || dpi != targetDpi)
+            double scale = targetDpi / 96.0;
+            double effectiveOuterWidth = activeOuterLogicalWidth > 0 ? activeOuterLogicalWidth : pixelWidth / scale;
+            bool outlineChanged = width != pixelWidth || height != pixelHeight || dpi != targetDpi ||
+                Math.Abs(cornerExtent - targetCornerExtent) > 0.01 ||
+                Math.Abs(currentOuterLogicalWidth - effectiveOuterWidth) > 0.05;
+            if (outlineChanged)
             {
-                double scale = targetDpi / 96.0;
+                double clipPixelWidth = effectiveOuterWidth * scale;
                 GeometrySource next = null;
                 CompositionPathGeometry nextPath = null;
                 CompositionGeometricClip nextClip = null;
@@ -109,18 +125,23 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                 try
                 {
                     next = GeometrySource.Create(CardOutline.Create(new Rect(32 * scale + .5, 32 * scale + .5,
-                        pixelWidth - 64 * scale - 1, pixelHeight - 64 * scale - 1), scale));
+                        Math.Max(1, clipPixelWidth - 64 * scale - 1), Math.Max(1, pixelHeight - 64 * scale - 1)), scale, targetCornerExtent));
                     nextPath = compositor.CreatePathGeometry(new CompositionPath(next));
                     nextClip = compositor.CreateGeometricClip(nextPath);
-                    nextFactory = compositor.CreateEffectFactory(new GaussianBlurEffect {
-                        Radius = (float)(6 * scale), Source = new CompositionEffectSourceParameter("backdrop") });
-                    nextBrush = nextFactory.CreateBrush();
-                    nextBrush.SetSourceParameter("backdrop", backdrop);
-                    visual.Clip = nextClip; visual.Brush = nextBrush;
+                    if (blurBrush == null || dpi != targetDpi)
+                    {
+                        nextFactory = compositor.CreateEffectFactory(new GaussianBlurEffect {
+                            Radius = (float)(6 * scale), Source = new CompositionEffectSourceParameter("backdrop") });
+                        nextBrush = nextFactory.CreateBrush();
+                        nextBrush.SetSourceParameter("backdrop", backdrop);
+                        visual.Brush = nextBrush;
+                    }
+                    visual.Clip = nextClip;
                 }
                 catch
                 {
-                    visual.Clip = clip; visual.Brush = blurBrush;
+                    visual.Clip = clip;
+                    if (nextBrush != null) visual.Brush = blurBrush;
                     if (nextBrush != null) nextBrush.Dispose(); if (nextFactory != null) nextFactory.Dispose();
                     if (nextClip != null) nextClip.Dispose(); if (nextPath != null) nextPath.Dispose();
                     if (next != null) next.Dispose(); throw;
@@ -131,12 +152,18 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                 GeometrySource oldGeometry = geometry;
                 CompositionEffectBrush oldBrush = blurBrush; CompositionEffectFactory oldFactory = blurFactory;
                 clip = nextClip; clipPath = nextPath; geometry = next;
-                blurBrush = nextBrush; blurFactory = nextFactory;
-                if (oldBrush != null) oldBrush.Dispose(); if (oldFactory != null) oldFactory.Dispose();
+                if (nextBrush != null)
+                {
+                    blurBrush = nextBrush; blurFactory = nextFactory;
+                    if (oldBrush != null) oldBrush.Dispose(); if (oldFactory != null) oldFactory.Dispose();
+                }
                 if (oldClip != null) oldClip.Dispose(); if (oldPath != null) oldPath.Dispose();
                 if (oldGeometry != null) oldGeometry.Dispose();
                 width = pixelWidth; height = pixelHeight; dpi = targetDpi;
-                root.Size = visual.Size = backgroundVisual.Size = new Vector2(width, height);
+                cornerExtent = targetCornerExtent;
+                currentOuterLogicalWidth = effectiveOuterWidth;
+                root.Size = visual.Size = new Vector2(width, height);
+                backgroundVisual.Size = new Vector2((float)clipPixelWidth, height);
                 root.CenterPoint = new Vector3(width / 2f, height / 2f, 0);
             }
             if (move || resize)
@@ -146,10 +173,52 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                 left = x; top = y;
             }
         }
+
+        internal void UpdateCardWidth(double activeOuterLogicalWidth, double targetCornerExtent)
+        {
+            if (disposed || dpi <= 0) return;
+            if (Math.Abs(currentOuterLogicalWidth - activeOuterLogicalWidth) <= 0.05 &&
+                Math.Abs(cornerExtent - targetCornerExtent) <= 0.01) return;
+            double scale = dpi / 96.0;
+            double clipPixelWidth = activeOuterLogicalWidth * scale;
+            GeometrySource next = null;
+            CompositionPathGeometry nextPath = null;
+            CompositionGeometricClip nextClip = null;
+            try
+            {
+                next = GeometrySource.Create(CardOutline.Create(new Rect(32 * scale + .5, 32 * scale + .5,
+                    Math.Max(1, clipPixelWidth - 64 * scale - 1), Math.Max(1, height - 64 * scale - 1)), scale, targetCornerExtent));
+                nextPath = compositor.CreatePathGeometry(new CompositionPath(next));
+                nextClip = compositor.CreateGeometricClip(nextPath);
+                visual.Clip = nextClip;
+            }
+            catch
+            {
+                if (nextClip != null) nextClip.Dispose();
+                if (nextPath != null) nextPath.Dispose();
+                if (next != null) next.Dispose();
+                return;
+            }
+            CompositionGeometricClip oldClip = clip;
+            CompositionPathGeometry oldPath = clipPath;
+            GeometrySource oldGeometry = geometry;
+            clip = nextClip; clipPath = nextPath; geometry = next;
+            if (oldClip != null) oldClip.Dispose();
+            if (oldPath != null) oldPath.Dispose();
+            if (oldGeometry != null) oldGeometry.Dispose();
+            cornerExtent = targetCornerExtent;
+            currentOuterLogicalWidth = activeOuterLogicalWidth;
+            backgroundVisual.Size = new Vector2((float)clipPixelWidth, height);
+        }
+
         internal void SetBackground(BackgroundFrame frame)
         {
             if (disposed) throw new ObjectDisposedException("AcrylicHost");
             background.SetFrame(frame);
+            if (frame.LeftSliceWidth > 0 && frame.RightSliceWidth > 0)
+                nineGridBrush.SetInsets(frame.LeftSliceWidth, 0, frame.RightSliceWidth, 0);
+            else
+                nineGridBrush.SetInsets(0, 0, 0, 0);
         }
         internal void SetMotion(double scale, double opacity)
         {
@@ -188,7 +257,9 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                 try { background.Dispose(); }
                 finally
                 {
-                    backgroundVisual.Dispose(); visual.Dispose(); root.Dispose(); target.Dispose();
+                    backgroundVisual.Dispose();
+                    if (nineGridBrush != null) nineGridBrush.Dispose();
+                    visual.Dispose(); root.Dispose(); target.Dispose();
                     if (blurBrush != null) blurBrush.Dispose(); if (blurFactory != null) blurFactory.Dispose();
                     if (clip != null) clip.Dispose(); if (clipPath != null) clipPath.Dispose();
                     if (geometry != null) geometry.Dispose();

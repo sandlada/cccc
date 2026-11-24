@@ -21,7 +21,13 @@ namespace Cccc.Adapters.Outbound.Windows.Tests
                 {
                     ShowPreview = false,
                     UseMaterial = false,
-                    Layout = LayoutMode.Taskbar
+                    Layout = LayoutMode.Taskbar,
+                    DisplayMode = DisplayMode.IconAndLabel,
+                    CornerRadius = 12,
+                    FullCornerRadius = true,
+                    Padding = 14,
+                    ShowBorder = false,
+                    ShowShadow = false
                 });
 
                 Assert.True(saved.Success);
@@ -30,6 +36,12 @@ namespace Cccc.Adapters.Outbound.Windows.Tests
                 Assert.False(loaded.Model.ShowPreview);
                 Assert.False(loaded.Model.UseMaterial);
                 Assert.Equal(LayoutMode.Taskbar, loaded.Model.Layout);
+                Assert.Equal(DisplayMode.IconAndLabel, loaded.Model.DisplayMode);
+                Assert.Equal(12, loaded.Model.CornerRadius);
+                Assert.True(loaded.Model.FullCornerRadius);
+                Assert.Equal(14, loaded.Model.Padding);
+                Assert.False(loaded.Model.ShowBorder);
+                Assert.False(loaded.Model.ShowShadow);
             }
             finally { Directory.Delete(directory, true); }
         }

@@ -124,6 +124,12 @@ namespace Cccc.Adapters.Inbound.Desktop
             menu.Items.Add(previewItem);
             menu.Items.Add(startupItem);
             menu.Items.Add(materialItem);
+            ToolStripMenuItem personalizationItem = new ToolStripMenuItem("个性化设置…");
+            personalizationItem.Click += delegate
+            {
+                PersonalizationDialog.ShowDialogOrActivate(
+                    preferences, changePreferences, status, isDark, applyPreferences, RefreshPreferences);
+            };
             ToolStripMenuItem styleMenu = new ToolStripMenuItem("提示样式");
             cardStyleItem = new ToolStripMenuItem("普通卡片");
             taskbarStyleItem = new ToolStripMenuItem("任务栏单行（实验性）");
@@ -132,6 +138,7 @@ namespace Cccc.Adapters.Inbound.Desktop
             styleMenu.DropDownItems.Add(cardStyleItem);
             styleMenu.DropDownItems.Add(taskbarStyleItem);
             positionStatusItem = new ToolStripMenuItem { Enabled = false };
+            menu.Items.Add(personalizationItem);
             menu.Items.Add(styleMenu);
             menu.Items.Add(positionStatusItem);
             menu.Items.Add(new ToolStripSeparator());

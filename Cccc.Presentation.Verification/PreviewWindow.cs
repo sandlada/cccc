@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -8,6 +9,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using Cccc.Adapters.Outbound.Toast.Wpf;
+using Cccc.Adapters.Outbound.Windows;
 using Cccc.Application;
 using Cccc.Domain.Feedback;
 using Cccc.Platform.Windows;
@@ -38,6 +40,7 @@ namespace Cccc.Presentation.Verification
 
         private ComboBox kindBox;
         private ComboBox layoutBox;
+        private ComboBox displayModeBox;
         private ComboBox themeBox;
         private ComboBox intervalBox;
         private TextBox titleBox;
@@ -49,13 +52,23 @@ namespace Cccc.Presentation.Verification
         private CheckBox keepVisibleCheck;
         private CheckBox showPreviewCheck;
         private CheckBox materialCheck;
+        private CheckBox fullCornerRadiusCheck;
+        private CheckBox showBorderCheck;
+        private CheckBox showShadowCheck;
+        private CheckBox autoSaveCheck;
         private Slider countSlider;
+        private Slider cornerRadiusSlider;
+        private Slider paddingSlider;
         private TextBlock countLabel;
+        private TextBlock cornerRadiusLabel;
+        private TextBlock paddingLabel;
         private TextBlock stateLabel;
         private TextBlock statusLabel;
         private TextBlock outlineLabel;
         private Border previewOutline;
 
+        private readonly FilePreferencesStore preferencesStore;
+        private PreferencesModel currentPreferences;
         private ToastWindow toast;
         private int copyCount = 1;
         private bool updatingControls;
@@ -82,8 +95,18 @@ namespace Cccc.Presentation.Verification
             diagnosticsTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
             diagnosticsTimer.Tick += delegate { UpdateDiagnostics(); };
 
+            string settingsPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Sandlada.Cccc", "settings-taskbar-experiment.txt");
+            preferencesStore = new FilePreferencesStore(settingsPath, true);
+            var loaded = preferencesStore.Load();
+            currentPreferences = loaded.State == PreferencesLoadState.Loaded && loaded.Model != null
+                ? loaded.Model
+                : new PreferencesModel();
+
             PositionWindow();
             Content = CreateLayout();
+            SyncControlsFromPreferences(currentPreferences);
             WireControls();
 
             SourceInitialized += delegate { PositionWindow(); };
@@ -220,21 +243,43 @@ namespace Cccc.Presentation.Verification
                 }
                 statusLabel.Text = "已恢復 2 秒自動淡出。";
             };
-            showPreviewCheck.Checked += delegate { PresentCurrent(false); };
-            showPreviewCheck.Unchecked += delegate { PresentCurrent(false); };
+            showPreviewCheck.Checked += delegate { ApplyPersonalizationLive(); };
+            showPreviewCheck.Unchecked += delegate { ApplyPersonalizationLive(); };
             materialCheck.Checked += delegate
             {
                 if (toast == null) return;
                 toast.SetMaterialEnabled(true);
-                PresentCurrent(false);
+                ApplyPersonalizationLive();
                 statusLabel.Text = "Acrylic 已開啟。";
             };
             materialCheck.Unchecked += delegate
             {
                 if (toast == null) return;
                 toast.SetMaterialEnabled(false);
-                PresentCurrent(false);
+                ApplyPersonalizationLive();
                 statusLabel.Text = "Acrylic 已關閉。";
+            };
+            displayModeBox.SelectionChanged += delegate { ApplyPersonalizationLive(); };
+            cornerRadiusSlider.ValueChanged += delegate { ApplyPersonalizationLive(); };
+            fullCornerRadiusCheck.Checked += delegate
+            {
+                cornerRadiusSlider.IsEnabled = false;
+                ApplyPersonalizationLive();
+            };
+            fullCornerRadiusCheck.Unchecked += delegate
+            {
+                cornerRadiusSlider.IsEnabled = true;
+                ApplyPersonalizationLive();
+            };
+            paddingSlider.ValueChanged += delegate { ApplyPersonalizationLive(); };
+            showBorderCheck.Checked += delegate { ApplyPersonalizationLive(); };
+            showBorderCheck.Unchecked += delegate { ApplyPersonalizationLive(); };
+            showShadowCheck.Checked += delegate { ApplyPersonalizationLive(); };
+            showShadowCheck.Unchecked += delegate { ApplyPersonalizationLive(); };
+            layoutBox.SelectionChanged += delegate
+            {
+                if (updatingControls) return;
+                if (autoSaveCheck.IsChecked == true) SavePreferencesToStore(false);
             };
         }
 
@@ -297,6 +342,16 @@ namespace Cccc.Presentation.Verification
             AddChoice(layoutBox, "任務欄單行", LayoutMode.Taskbar);
             layoutBox.SelectedIndex = 0;
 
+            displayModeBox = new ComboBox { MinHeight = 28 };
+            AddChoice(displayModeBox, "圖示 + 標籤 + 複製內容（預設）", DisplayMode.Full);
+            AddChoice(displayModeBox, "僅顯示圖示", DisplayMode.IconOnly);
+            AddChoice(displayModeBox, "僅顯示圖示 + 標籤", DisplayMode.IconAndLabel);
+            AddChoice(displayModeBox, "僅顯示圖示 + 複製內容", DisplayMode.IconAndContent);
+            AddChoice(displayModeBox, "僅顯示標籤", DisplayMode.LabelOnly);
+            AddChoice(displayModeBox, "僅顯示複製內容", DisplayMode.ContentOnly);
+            AddChoice(displayModeBox, "僅顯示標籤 + 複製內容", DisplayMode.LabelAndContent);
+            displayModeBox.SelectedIndex = 0;
+
             themeBox = new ComboBox { MinHeight = 28 };
             AddChoice(themeBox, "跟隨系統", PreviewThemeMode.System);
             AddChoice(themeBox, "淺色", PreviewThemeMode.Light);
@@ -323,6 +378,46 @@ namespace Cccc.Presentation.Verification
             keepVisibleCheck = CreateCheckBox("保持顯示（不自動淡出）", true);
             showPreviewCheck = CreateCheckBox("顯示內容預覽", true);
             materialCheck = CreateCheckBox("啟用 Acrylic 材質", true);
+            fullCornerRadiusCheck = CreateCheckBox("滿圓（高度 / 2）", false);
+            showBorderCheck = CreateCheckBox("顯示邊框 (Border)", true);
+            showShadowCheck = CreateCheckBox("顯示陰影 (Shadow)", true);
+            autoSaveCheck = CreateCheckBox("即時同步至 Cccc 設定檔", true);
+
+            cornerRadiusSlider = new Slider
+            {
+                Minimum = AppearanceBounds.MinCornerRadius,
+                Maximum = AppearanceBounds.MaxCornerRadius,
+                Value = AppearanceBounds.DefaultCornerRadius,
+                TickFrequency = 1,
+                IsSnapToTickEnabled = true,
+                Margin = new Thickness(0, 4, 0, 0)
+            };
+            cornerRadiusLabel = new TextBlock
+            {
+                Text = AppearanceBounds.DefaultCornerRadius + " px",
+                Foreground = TextBrush,
+                FontWeight = FontWeights.SemiBold,
+                FontFamily = new FontFamily("Consolas"),
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+
+            paddingSlider = new Slider
+            {
+                Minimum = AppearanceBounds.MinPadding,
+                Maximum = AppearanceBounds.MaxPadding,
+                Value = AppearanceBounds.DefaultPadding,
+                TickFrequency = 1,
+                IsSnapToTickEnabled = true,
+                Margin = new Thickness(0, 4, 0, 0)
+            };
+            paddingLabel = new TextBlock
+            {
+                Text = AppearanceBounds.DefaultPadding + " px",
+                Foreground = TextBrush,
+                FontWeight = FontWeights.SemiBold,
+                FontFamily = new FontFamily("Consolas"),
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
 
             countSlider = new Slider
             {
@@ -395,15 +490,57 @@ namespace Cccc.Presentation.Verification
             StackPanel appearance = new StackPanel();
             appearance.Children.Add(Label("版面"));
             appearance.Children.Add(layoutBox);
+            appearance.Children.Add(Label("顯示模式"));
+            appearance.Children.Add(displayModeBox);
             appearance.Children.Add(Label("主題"));
             appearance.Children.Add(themeBox);
+
+            Grid radiusHeader = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+            radiusHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            radiusHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            TextBlock radiusTitle = Label("圓角半徑");
+            radiusTitle.Margin = new Thickness(0);
+            radiusTitle.VerticalAlignment = VerticalAlignment.Center;
+            radiusHeader.Children.Add(radiusTitle);
+            Grid.SetColumn(cornerRadiusLabel, 1);
+            radiusHeader.Children.Add(cornerRadiusLabel);
+            appearance.Children.Add(radiusHeader);
+            appearance.Children.Add(cornerRadiusSlider);
+            appearance.Children.Add(fullCornerRadiusCheck);
+
+            Grid padHeader = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+            padHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            padHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            TextBlock padTitle = Label("內邊距 (Padding)");
+            padTitle.Margin = new Thickness(0);
+            padTitle.VerticalAlignment = VerticalAlignment.Center;
+            padHeader.Children.Add(padTitle);
+            Grid.SetColumn(paddingLabel, 1);
+            padHeader.Children.Add(paddingLabel);
+            appearance.Children.Add(padHeader);
+            appearance.Children.Add(paddingSlider);
+
+            appearance.Children.Add(showBorderCheck);
+            appearance.Children.Add(showShadowCheck);
             appearance.Children.Add(materialCheck);
+            appearance.Children.Add(autoSaveCheck);
+
+            WrapPanel settingsActions = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+            settingsActions.Children.Add(CreateButton("儲存為設定", delegate { SavePreferencesToStore(true); }, true));
+            settingsActions.Children.Add(CreateButton("恢復預設外觀", delegate
+            {
+                SyncControlsFromPreferences(new PreferencesModel());
+                ApplyPersonalizationLive();
+                statusLabel.Text = "已恢復預設外觀設定。";
+            }, false));
+            appearance.Children.Add(settingsActions);
+
             TextBlock materialNote = new TextBlock
             {
                 Text = "任務欄樣式不使用 Acrylic；系統高對比或關閉透明效果時也會停用。",
                 Foreground = MutedBrush,
                 TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 4, 0, 0)
+                Margin = new Thickness(0, 6, 0, 0)
             };
             appearance.Children.Add(materialNote);
 
@@ -549,10 +686,88 @@ namespace Cccc.Presentation.Verification
             ToastProfile.SetCompact(layout == LayoutMode.Taskbar);
             Themes.MaterialAvailable = false;
             toast = new ToastWindow(materialCheck.IsChecked == true);
+            toast.ApplyPersonalization(BuildPreferencesFromControls());
             toast.PreviewKeepVisible = keepVisibleCheck.IsChecked == true;
             toast.PreviewPositionProvider = CalculateToastPosition;
             UpdateMaterialAvailability();
             UpdateOutline();
+        }
+
+        private void SyncControlsFromPreferences(PreferencesModel model)
+        {
+            updatingControls = true;
+            try
+            {
+                SelectByTag(layoutBox, model.Layout);
+                SelectByTag(displayModeBox, model.DisplayMode);
+                showPreviewCheck.IsChecked = model.ShowPreview;
+                materialCheck.IsChecked = model.UseMaterial;
+                cornerRadiusSlider.Value = model.CornerRadius;
+                fullCornerRadiusCheck.IsChecked = model.FullCornerRadius;
+                cornerRadiusSlider.IsEnabled = !model.FullCornerRadius;
+                cornerRadiusLabel.Text = model.FullCornerRadius ? "滿圓" : model.CornerRadius + " px";
+                paddingSlider.Value = model.Padding;
+                paddingLabel.Text = model.Padding + " px";
+                showBorderCheck.IsChecked = model.ShowBorder;
+                showShadowCheck.IsChecked = model.ShowShadow;
+            }
+            finally { updatingControls = false; }
+        }
+
+        private static void SelectByTag<T>(ComboBox box, T value)
+        {
+            for (int i = 0; i < box.Items.Count; i++)
+            {
+                if (box.Items[i] is ComboBoxItem item && item.Tag is T tag && EqualityComparer<T>.Default.Equals(tag, value))
+                {
+                    box.SelectedIndex = i;
+                    return;
+                }
+            }
+        }
+
+        private PreferencesModel BuildPreferencesFromControls()
+        {
+            return new PreferencesModel
+            {
+                Layout = SelectedTag(layoutBox, LayoutMode.Card),
+                DisplayMode = SelectedTag(displayModeBox, DisplayMode.Full),
+                ShowPreview = showPreviewCheck.IsChecked == true,
+                UseMaterial = materialCheck.IsChecked == true,
+                CornerRadius = (int)Math.Round(cornerRadiusSlider.Value),
+                FullCornerRadius = fullCornerRadiusCheck.IsChecked == true,
+                Padding = (int)Math.Round(paddingSlider.Value),
+                ShowBorder = showBorderCheck.IsChecked == true,
+                ShowShadow = showShadowCheck.IsChecked == true
+            };
+        }
+
+        private void ApplyPersonalizationLive()
+        {
+            if (updatingControls || isClosed) return;
+            currentPreferences = BuildPreferencesFromControls();
+            cornerRadiusLabel.Text = currentPreferences.FullCornerRadius ? "滿圓" : currentPreferences.CornerRadius + " px";
+            paddingLabel.Text = currentPreferences.Padding + " px";
+            if (toast != null)
+            {
+                toast.ApplyPersonalization(currentPreferences);
+                toast.RefreshAppearance();
+                PresentCurrent(false);
+                UpdateOutline();
+            }
+            if (autoSaveCheck.IsChecked == true) SavePreferencesToStore(false);
+        }
+
+        private void SavePreferencesToStore(bool announce)
+        {
+            currentPreferences = BuildPreferencesFromControls();
+            PreferencesSaveResult result = preferencesStore.Save(currentPreferences);
+            if (announce)
+            {
+                statusLabel.Text = result.Success
+                    ? "已儲存至 Cccc 設定檔。"
+                    : "儲存失敗：" + result.Error;
+            }
         }
 
         private void CloseToast()
@@ -577,6 +792,7 @@ namespace Cccc.Presentation.Verification
                 toast.CopyPressed(copyCount, HostHandle(), preview);
             }
             toast.Present(BuildSample(), preview);
+            UpdateOutline();
             UpdateState();
         }
 
@@ -692,12 +908,14 @@ namespace Cccc.Presentation.Verification
         private void UpdateOutline()
         {
             if (previewOutline == null) return;
-            previewOutline.Width = ToastWindow.OuterWidth;
-            previewOutline.Height = ToastWindow.OuterHeight;
+            double w = toast != null ? toast.ActiveOuterWidth : ToastWindow.OuterWidth;
+            double h = toast != null ? toast.ActiveOuterHeight : ToastWindow.OuterHeight;
+            previewOutline.Width = w;
+            previewOutline.Height = h;
             if (outlineLabel != null)
             {
-                outlineLabel.Text = "實際卡片在面板旁 · " + ToastWindow.OuterWidth + " × " +
-                    ToastWindow.OuterHeight + " DIP";
+                outlineLabel.Text = "實際卡片在面板旁 · " + Math.Round(w) + " × " +
+                    Math.Round(h) + " DIP";
             }
         }
 
