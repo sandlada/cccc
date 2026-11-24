@@ -1,0 +1,15 @@
+{
+  "name": "cccc-material-shape-preview",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Standalone HTML preview of the published @sandlada/mdc <mdc-shape> used by Cccc's copy badge.",
+  "type": "module",
+  "scripts": {
+    "build": "esbuild node_modules/@sandlada/mdc/build/components/shape/index.js --bundle --format=esm --minify --outfile=shape.bundle.js",
+    "serve": "python -m http.server 8792 --bind 127.0.0.1"
+  },
+  "devDependencies": {
+    "@sandlada/mdc": "0.3.0-20261123.a",
+    "esbuild": "^0.25.0"
+  }
+}

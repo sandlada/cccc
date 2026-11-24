@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <AssemblyName>Cccc</AssemblyName>
+    <RootNamespace>Cccc.Desktop</RootNamespace>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>..\assets\Cccc.ico</ApplicationIcon>
+    <ApplicationManifest>..\assets\Cccc.manifest</ApplicationManifest>
+    <AssemblyTitle>Cccc 复制确认</AssemblyTitle>
+    <Description>Windows 复制确认与连按反馈工具</Description>
+    <Company>Cccc</Company>
+    <Product>Cccc</Product>
+    <!-- WPF owns DPI awareness through Cccc.manifest; WinForms is only the tray backend. -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Cccc.Application\Cccc.Application.csproj" />
+    <ProjectReference Include="..\Cccc.Platform.Windows\Cccc.Platform.Windows.csproj" />
+    <ProjectReference Include="..\Cccc.Adapters.Inbound.Desktop\Cccc.Adapters.Inbound.Desktop.csproj" />
+    <ProjectReference Include="..\Cccc.Adapters.Outbound.Windows\Cccc.Adapters.Outbound.Windows.csproj" />
+    <ProjectReference Include="..\Cccc.Adapters.Outbound.Toast.Wpf\Cccc.Adapters.Outbound.Toast.Wpf.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>Cccc.Architecture.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

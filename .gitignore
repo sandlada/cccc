@@ -419,3 +419,6 @@ FodyWeavers.xsd
 # Public release notes are documentation, not build output.
 !/docs/releases/
 !/docs/releases/*.md
+
+# AI
+.playwright*

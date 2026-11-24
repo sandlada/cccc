@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Cccc.Domain</AssemblyName>
+    <RootNamespace>Cccc.Domain</RootNamespace>
+  </PropertyGroup>
+
+  <Target Name="ForbidOutwardDependencies" BeforeTargets="CollectPackageReferences;ResolveProjectReferences">
+    <ItemGroup>
+      <_Forbidden Include="@(PackageReference)" />
+      <_Forbidden Include="@(ProjectReference)" />
+    </ItemGroup>
+    <Error Condition="'@(_Forbidden)' != ''"
+           Text="Cccc.Domain must stay dependency-free. Found: @(_Forbidden). Move the type inward or declare a port in Cccc.Application." />
+  </Target>
+</Project>

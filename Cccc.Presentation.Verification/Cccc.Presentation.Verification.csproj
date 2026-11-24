@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>Cccc.Presentation.Verification</AssemblyName>
+    <RootNamespace>Cccc.Presentation.Verification</RootNamespace>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <StartupObject>Cccc.Presentation.Verification.Program</StartupObject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Cccc.Domain\Cccc.Domain.csproj" />
+    <ProjectReference Include="..\Cccc.Application\Cccc.Application.csproj" />
+    <ProjectReference Include="..\Cccc.Adapters.Outbound.Windows\Cccc.Adapters.Outbound.Windows.csproj" />
+    <ProjectReference Include="..\Cccc.Adapters.Outbound.Toast.Wpf\Cccc.Adapters.Outbound.Toast.Wpf.csproj" />
+  </ItemGroup>
+</Project>
