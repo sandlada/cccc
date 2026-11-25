@@ -912,6 +912,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             titleTransition.Advance(now); ApplyTitleFrame();
             bool expandWasRunning = counterExpand.Running;
             counterExpand.Advance(now);
+            bool expandMoved = false;
             if (expandWasRunning || counterExpand.Running)
             {
                 ApplyCardWidthFrame();
@@ -925,6 +926,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                         double scale = dpi / 96.0;
                         (double tx, double ty) = ComputeTargetOrigin(monitor, info, dpi, scale);
                         windowMotion.SnapPosition(tx, ty);
+                        expandMoved = true;
                     }
                 }
             }
@@ -936,15 +938,15 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                 Opacity = windowMotion.Opacity;
                 double activeScale = ToastProfile.Compact ? 1.0 : windowMotion.Scale;
                 windowScale.ScaleX = windowScale.ScaleY = activeScale;
-                if (windowHandle != IntPtr.Zero)
-                {
-                    int dpi = EffectiveDpi();
-                    double scale = dpi / 96.0;
-                    int width = (int)Math.Round(maxOuterWidth * scale), height = (int)Math.Round(maxOuterHeight * scale);
-                    ApplyWindowBounds(windowHandle, (int)Math.Round(windowMotion.RenderX), (int)Math.Round(windowMotion.RenderY), width, height, dpi);
-                }
-                if (!windowMotion.FadeRunning && windowMotion.FadingOut) { HideAndClear(); return; }
             }
+            if ((windowMotionWasRunning || expandMoved) && windowHandle != IntPtr.Zero)
+            {
+                int dpi = EffectiveDpi();
+                double scale = dpi / 96.0;
+                int width = (int)Math.Round(maxOuterWidth * scale), height = (int)Math.Round(maxOuterHeight * scale);
+                ApplyWindowBounds(windowHandle, (int)Math.Round(windowMotion.RenderX), (int)Math.Round(windowMotion.RenderY), width, height, dpi);
+            }
+            if (windowMotionWasRunning && !windowMotion.FadeRunning && windowMotion.FadingOut) { HideAndClear(); return; }
             if (acrylic != null)
             {
                 try { acrylic.SetMotion(ToastProfile.Compact ? 1.0 : windowMotion.Scale, Opacity); }

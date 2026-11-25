@@ -257,6 +257,28 @@ namespace Cccc.Presentation.Verification
                 Verify(Near(card.Width, 360) && Field<Border>(toast, "counter").Opacity == 1, "repeatCopySettlesExpanded");
             }
             finally { toast.Close(); }
+
+            ToastWindow rightToast = new ToastWindow(false);
+            Field<Grid>(rightToast, "surface").Opacity = 0;
+            try
+            {
+                rightToast.ApplyPersonalization(new PreferencesModel { Position = WindowPosition.BottomRight });
+                rightToast.CopyPressed(1, IntPtr.Zero, true);
+                rightToast.Present(Sample(1), true);
+                Frame(rightToast);
+                Pump(500);
+                IntPtr handle = Field<IntPtr>(rightToast, "windowHandle");
+                WindowsNativeMethods.WindowRectangle singleBounds;
+                Verify(WindowsNativeMethods.GetWindowRect(handle, out singleBounds), "rightAlignedSingleBoundsAvailable");
+
+                rightToast.CopyPressed(2, IntPtr.Zero, true);
+                Frame(rightToast);
+                Pump(350);
+                WindowsNativeMethods.WindowRectangle expandedBounds;
+                Verify(WindowsNativeMethods.GetWindowRect(handle, out expandedBounds), "rightAlignedExpandedBoundsAvailable");
+                Verify(expandedBounds.Left < singleBounds.Left, "rightAlignedExpandShiftsWindowLeft singleLeft=" + singleBounds.Left + " expandedLeft=" + expandedBounds.Left);
+            }
+            finally { rightToast.Close(); }
         }
 
         internal static void Run(string outputDirectory)
