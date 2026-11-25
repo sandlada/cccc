@@ -46,6 +46,7 @@ namespace Cccc.Presentation.Verification
         private TextBox titleBox;
         private TextBox previewBox;
         private TextBox typeBox;
+        private TextBox fontFamilyBox;
         private TextBox diagnosticsBox;
         private CheckBox autoTitleCheck;
         private CheckBox repeatCheck;
@@ -290,6 +291,15 @@ namespace Cccc.Presentation.Verification
             showBorderCheck.Unchecked += delegate { ApplyPersonalizationLive(); };
             showShadowCheck.Checked += delegate { ApplyPersonalizationLive(); };
             showShadowCheck.Unchecked += delegate { ApplyPersonalizationLive(); };
+            fontFamilyBox.KeyDown += (_, e) =>
+            {
+                if (e.Key == System.Windows.Input.Key.Enter)
+                {
+                    ApplyPersonalizationLive();
+                    e.Handled = true;
+                }
+            };
+            fontFamilyBox.LostKeyboardFocus += delegate { ApplyPersonalizationLive(); };
             layoutBox.SelectionChanged += delegate
             {
                 if (updatingControls) return;
@@ -397,6 +407,8 @@ namespace Cccc.Presentation.Verification
             showBorderCheck = CreateCheckBox("顯示邊框 (Border)", true);
             showShadowCheck = CreateCheckBox("顯示陰影 (Shadow)", true);
             autoSaveCheck = CreateCheckBox("即時同步至 Cccc 設定檔", true);
+            fontFamilyBox = CreateTextBox(false);
+            fontFamilyBox.ToolTip = "輸入系統已安裝的字體名稱（支援逗號分隔多個回退字體），留空則恢復預設";
 
             cornerRadiusSlider = new Slider
             {
@@ -570,6 +582,18 @@ namespace Cccc.Presentation.Verification
             appearance.Children.Add(showShadowCheck);
             appearance.Children.Add(materialCheck);
             appearance.Children.Add(autoSaveCheck);
+
+            appearance.Children.Add(Label("字體 (Font Family)"));
+            Grid fontRow = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+            fontRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            fontRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Button applyFontButton = CreateButton("套用", delegate { ApplyPersonalizationLive(); }, false);
+            applyFontButton.Margin = new Thickness(6, 0, 0, 0);
+            Grid.SetColumn(fontFamilyBox, 0);
+            Grid.SetColumn(applyFontButton, 1);
+            fontRow.Children.Add(fontFamilyBox);
+            fontRow.Children.Add(applyFontButton);
+            appearance.Children.Add(fontRow);
 
             WrapPanel settingsActions = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
             settingsActions.Children.Add(CreateButton("儲存為設定", delegate { SavePreferencesToStore(true); }, true));
@@ -766,6 +790,7 @@ namespace Cccc.Presentation.Verification
                 paddingLabel.Text = model.Padding + " px";
                 showBorderCheck.IsChecked = model.ShowBorder;
                 showShadowCheck.IsChecked = model.ShowShadow;
+                fontFamilyBox.Text = model.FontFamily ?? AppearanceBounds.DefaultFontFamily;
             }
             finally { updatingControls = false; }
         }
@@ -796,7 +821,8 @@ namespace Cccc.Presentation.Verification
                 FullCounterCornerRadius = fullCounterCornerRadiusCheck.IsChecked == true,
                 Padding = (int)Math.Round(paddingSlider.Value),
                 ShowBorder = showBorderCheck.IsChecked == true,
-                ShowShadow = showShadowCheck.IsChecked == true
+                ShowShadow = showShadowCheck.IsChecked == true,
+                FontFamily = AppearanceBounds.NormalizeFontFamily(fontFamilyBox.Text)
             };
         }
 
