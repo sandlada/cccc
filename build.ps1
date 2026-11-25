@@ -2,6 +2,9 @@ param(
     [string]$Configuration = 'Debug',
     [string]$FontDirectory = (Join-Path $PSScriptRoot 'assets/fonts'),
     [string]$OutputDirectory = (Join-Path $PSScriptRoot 'artifacts/build'),
+    [string]$PackageDirectory = (Join-Path $PSScriptRoot 'artifacts/release'),
+    [switch]$Package,
+    [switch]$SelfContained,
     [switch]$CheckQuality,
     [switch]$CheckAnimation,
     [switch]$CheckTaskbar,
@@ -142,26 +145,30 @@ if ($Uninstall) {
     exit 0
 }
 
-# Fonts are resolved from system/user-configured font families rather than embedded in the binary.
+$needsDevBuild = (-not $Package) -or $CheckQuality -or $CheckTaskbar -or $CheckAnimation -or $CheckMaterial -or $CheckShape
 $fontRoot = Get-FullPath $FontDirectory
-& dotnet build $solution -c $Configuration --nologo ("-p:FontDirectory=" + $fontRoot)
-if ($LASTEXITCODE -ne 0) { throw ('dotnet build failed with exit code {0}.' -f $LASTEXITCODE) }
 
-$appOutput = Join-Path $PSScriptRoot ('Cccc.Desktop/bin/' + $Configuration + '/' + $targetFramework)
-$builtExecutable = Join-Path $appOutput 'Cccc.exe'
-if (-not (Test-Path -LiteralPath $builtExecutable -PathType Leaf)) {
-    throw ('Build output not found: ' + $builtExecutable)
+if ($needsDevBuild) {
+    # Fonts are resolved from system/user-configured font families rather than embedded in the binary.
+    & dotnet build $solution -c $Configuration --nologo ("-p:FontDirectory=" + $fontRoot)
+    if ($LASTEXITCODE -ne 0) { throw ('dotnet build failed with exit code {0}.' -f $LASTEXITCODE) }
+
+    $appOutput = Join-Path $PSScriptRoot ('Cccc.Desktop/bin/' + $Configuration + '/' + $targetFramework)
+    $builtExecutable = Join-Path $appOutput 'Cccc.exe'
+    if (-not (Test-Path -LiteralPath $builtExecutable -PathType Leaf)) {
+        throw ('Build output not found: ' + $builtExecutable)
+    }
+    $outputRoot = Get-FullPath $OutputDirectory
+    $outputRoot = Assert-SafeRemovalPath $outputRoot
+    if (Test-Path -LiteralPath $outputRoot) { Remove-Item -LiteralPath $outputRoot -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
+    Copy-Item -Path (Join-Path $appOutput '*') -Destination $outputRoot -Recurse -Force
+    $executable = Join-Path $outputRoot 'Cccc.exe'
+    if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
+        throw ('Copy failed: ' + $executable)
+    }
+    Write-Output ('Built ' + $executable)
 }
-$outputRoot = Get-FullPath $OutputDirectory
-$outputRoot = Assert-SafeRemovalPath $outputRoot
-if (Test-Path -LiteralPath $outputRoot) { Remove-Item -LiteralPath $outputRoot -Recurse -Force }
-New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
-Copy-Item -Path (Join-Path $appOutput '*') -Destination $outputRoot -Recurse -Force
-$executable = Join-Path $outputRoot 'Cccc.exe'
-if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
-    throw ('Copy failed: ' + $executable)
-}
-Write-Output ('Built ' + $executable)
 
 function Invoke-Checks([string]$Mode, [string[]]$Arguments = @()) {
     if (-not (Test-Path -LiteralPath $checksExecutable -PathType Leaf)) {
@@ -194,4 +201,69 @@ if ($CheckMaterial) {
 if ($CheckShape) {
     Invoke-Checks 'shape' (Join-Path $outputRoot 'shape-checks')
     Write-Output 'Shape checks passed.'
+}
+
+function Get-ProjectVersion {
+    $propsPath = Join-Path $PSScriptRoot 'Directory.Build.props'
+    if (Test-Path -LiteralPath $propsPath -PathType Leaf) {
+        [xml]$props = Get-Content -LiteralPath $propsPath -Raw
+        $versionNode = $props.SelectSingleNode('//PropertyGroup/Version')
+        if ($versionNode -and -not [string]::IsNullOrWhiteSpace($versionNode.InnerText)) {
+            return $versionNode.InnerText.Trim()
+        }
+    }
+    return '0.0.0'
+}
+
+if ($Package) {
+    $publishConfiguration = if ($PSBoundParameters.ContainsKey('Configuration')) { $Configuration } else { 'Release' }
+    $isSelfContained = [bool]$SelfContained
+    $version = Get-ProjectVersion
+    $suffix = if ($isSelfContained) { 'win-x64-self-contained' } else { 'win-x64' }
+    $packageRoot = Assert-SafeRemovalPath $PackageDirectory
+    if (-not (Test-Path -LiteralPath $packageRoot)) {
+        New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
+    }
+    $stagingRoot = Join-Path $packageRoot '_staging'
+    $zipName = ('Cccc-{0}-{1}.zip' -f $version, $suffix)
+    $zipPath = Join-Path $packageRoot $zipName
+
+    if (Test-Path -LiteralPath $stagingRoot) { Remove-Item -LiteralPath $stagingRoot -Recurse -Force }
+    if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
+
+    $desktopProject = Join-Path $PSScriptRoot 'Cccc.Desktop/Cccc.Desktop.csproj'
+    $scArg = if ($isSelfContained) { 'true' } else { 'false' }
+
+    try {
+        & dotnet publish $desktopProject -c $publishConfiguration -r win-x64 --self-contained $scArg -o $stagingRoot --nologo `
+            ('-p:FontDirectory=' + $fontRoot) '-p:DebugType=none' '-p:DebugSymbols=false'
+        if ($LASTEXITCODE -ne 0) { throw ('dotnet publish failed with exit code {0}.' -f $LASTEXITCODE) }
+
+        $publishedExe = Join-Path $stagingRoot 'Cccc.exe'
+        if (-not (Test-Path -LiteralPath $publishedExe -PathType Leaf)) {
+            throw ('Published executable not found: ' + $publishedExe)
+        }
+
+        Get-ChildItem -LiteralPath $stagingRoot -Include '*.pdb', '*.runtimeconfig.dev.json' -Recurse -File -ErrorAction SilentlyContinue |
+            Remove-Item -Force
+
+        $licensePath = Join-Path $PSScriptRoot 'LICENSE'
+        if (Test-Path -LiteralPath $licensePath -PathType Leaf) {
+            Copy-Item -LiteralPath $licensePath -Destination (Join-Path $stagingRoot 'LICENSE') -Force
+        }
+
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        [System.IO.Compression.ZipFile]::CreateFromDirectory(
+            $stagingRoot,
+            $zipPath,
+            [System.IO.Compression.CompressionLevel]::Optimal,
+            $false
+        )
+    }
+    finally {
+        if (Test-Path -LiteralPath $stagingRoot) { Remove-Item -LiteralPath $stagingRoot -Recurse -Force }
+    }
+
+    $sizeMb = [Math]::Round((Get-Item -LiteralPath $zipPath).Length / 1MB, 2)
+    Write-Output ('Packaged {0} ({1} MB)' -f $zipPath, $sizeMb)
 }

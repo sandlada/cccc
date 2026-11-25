@@ -46,7 +46,13 @@ dotnet test Cccc.sln -c Debug --nologo
 pwsh ./build.ps1 -CheckQuality
 ```
 
-> `build.ps1` 另支持 `-CheckAnimation`、`-CheckTaskbar`、`-CheckMaterial` 与 `-CheckShape` 验证参数。构建完成后，直接运行 `artifacts/build/Cccc.exe`（需保留同目录依赖文件）即可使用。
+打包为发布版 `.zip` 压缩包（默认使用 `Release` 配置，输出至 `artifacts/release/`）：
+
+```powershell
+pwsh ./build.ps1 -Package
+```
+
+> 附加 `-SelfContained` 可生成包含 .NET 运行时的独立发布包；`build.ps1` 另支持 `-CheckAnimation`、`-CheckTaskbar`、`-CheckMaterial` 与 `-CheckShape` 验证参数。构建完成后，直接运行 `artifacts/build/Cccc.exe`（需保留同目录依赖文件）即可使用。
 
 ## 卸载与清理
 
