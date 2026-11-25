@@ -25,8 +25,8 @@ namespace Cccc.Domain.Tests
         [InlineData(-10, 0)]
         [InlineData(0, 0)]
         [InlineData(26, 26)]
-        [InlineData(48, 48)]
-        [InlineData(999, 48)]
+        [InlineData(64, 64)]
+        [InlineData(999, 64)]
         public void Corner_radius_clamps_within_bounds(int input, int expected)
         {
             Assert.Equal(expected, ToastAppearancePolicy.ClampCornerRadius(input));

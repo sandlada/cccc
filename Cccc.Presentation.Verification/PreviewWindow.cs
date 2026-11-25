@@ -702,10 +702,14 @@ namespace Cccc.Presentation.Verification
                 SelectByTag(displayModeBox, model.DisplayMode);
                 showPreviewCheck.IsChecked = model.ShowPreview;
                 materialCheck.IsChecked = model.UseMaterial;
-                cornerRadiusSlider.Value = model.CornerRadius;
+                double maxRadius = Math.Max(1, Math.Floor(AppearanceBounds.ComputeCardHeight(model.DisplayMode, model.Padding) / 2.0));
+                cornerRadiusSlider.Maximum = maxRadius;
+                cornerRadiusSlider.Value = model.FullCornerRadius ? maxRadius : Math.Min(model.CornerRadius, maxRadius);
                 fullCornerRadiusCheck.IsChecked = model.FullCornerRadius;
                 cornerRadiusSlider.IsEnabled = !model.FullCornerRadius;
-                cornerRadiusLabel.Text = model.FullCornerRadius ? "滿圓" : model.CornerRadius + " px";
+                cornerRadiusLabel.Text = model.FullCornerRadius || cornerRadiusSlider.Value >= maxRadius
+                    ? $"滿圓 ({maxRadius:0} px)"
+                    : model.CornerRadius + " px";
                 paddingSlider.Value = model.Padding;
                 paddingLabel.Text = model.Padding + " px";
                 showBorderCheck.IsChecked = model.ShowBorder;
@@ -746,7 +750,23 @@ namespace Cccc.Presentation.Verification
         {
             if (updatingControls || isClosed) return;
             currentPreferences = BuildPreferencesFromControls();
-            cornerRadiusLabel.Text = currentPreferences.FullCornerRadius ? "滿圓" : currentPreferences.CornerRadius + " px";
+            double maxRadius = Math.Max(1, Math.Floor(AppearanceBounds.ComputeCardHeight(currentPreferences.DisplayMode, currentPreferences.Padding) / 2.0));
+            updatingControls = true;
+            try
+            {
+                cornerRadiusSlider.Maximum = maxRadius;
+                if (currentPreferences.FullCornerRadius)
+                    cornerRadiusSlider.Value = maxRadius;
+                else if (cornerRadiusSlider.Value > maxRadius)
+                {
+                    cornerRadiusSlider.Value = maxRadius;
+                    currentPreferences.CornerRadius = (int)maxRadius;
+                }
+            }
+            finally { updatingControls = false; }
+            cornerRadiusLabel.Text = currentPreferences.FullCornerRadius || currentPreferences.CornerRadius >= maxRadius
+                ? $"滿圓 ({maxRadius:0} px)"
+                : currentPreferences.CornerRadius + " px";
             paddingLabel.Text = currentPreferences.Padding + " px";
             if (toast != null)
             {

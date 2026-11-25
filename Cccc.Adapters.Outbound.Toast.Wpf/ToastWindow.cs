@@ -310,8 +310,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             double iconW = showIcon ? 34 : 0;
             double gapW = showIcon && (showLabel || showContent) ? 13 : 0;
             double textW = showContent ? 211 : (showLabel ? 84 : 0);
-            double contentH = (showLabel && showContent) ? 40 : (showLabel ? 22 : (showContent ? 18 : 32));
-            cardHeight = Math.Max(contentH + 2 * pad, showIcon ? 32 + 2 * pad : 24 + 2 * pad);
+            cardHeight = ToastAppearancePolicy.ComputeCardHeight(displayMode, pad);
 
             double bodyPadLeft = Math.Max(2, pad - 1);
             double bodyPadRight = Math.Max(2, pad - 1);

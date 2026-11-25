@@ -233,10 +233,14 @@ namespace Cccc.Adapters.Inbound.Desktop
                 {
                     int modeIdx = Array.FindIndex(DisplayModes, x => x.Mode == m.DisplayMode);
                     modeBox.SelectedIndex = modeIdx >= 0 ? modeIdx : 0;
-                    radiusSlider.Value = m.CornerRadius;
+                    double maxRadius = Math.Max(1, Math.Floor(AppearanceBounds.ComputeCardHeight(m.DisplayMode, m.Padding) / 2.0));
+                    radiusSlider.Maximum = maxRadius;
+                    radiusSlider.Value = m.FullCornerRadius ? maxRadius : Math.Min(m.CornerRadius, maxRadius);
                     fullRoundBox.IsChecked = m.FullCornerRadius;
                     radiusSlider.IsEnabled = !m.FullCornerRadius;
-                    radiusValueText.Text = m.FullCornerRadius ? "满圆" : $"{m.CornerRadius} px";
+                    radiusValueText.Text = m.FullCornerRadius
+                        ? $"满圆 ({maxRadius:0} px)"
+                        : (radiusSlider.Value >= maxRadius ? $"满圆 ({maxRadius:0} px)" : $"{m.CornerRadius} px");
                     paddingSlider.Value = m.Padding;
                     paddingValueText.Text = $"{m.Padding} px";
                     borderBox.IsChecked = m.ShowBorder;

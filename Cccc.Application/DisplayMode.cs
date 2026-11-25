@@ -25,5 +25,7 @@ namespace Cccc.Application
 
         public static int ClampCornerRadius(int value) => ToastAppearancePolicy.ClampCornerRadius(value);
         public static int ClampPadding(int value) => ToastAppearancePolicy.ClampPadding(value);
+        public static double ComputeCardHeight(DisplayMode mode, int padding) =>
+            ToastAppearancePolicy.ComputeCardHeight((ToastDisplayMode)mode, padding);
     }
 }

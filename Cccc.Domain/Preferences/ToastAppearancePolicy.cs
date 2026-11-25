@@ -5,7 +5,7 @@ namespace Cccc.Domain.Preferences
     public static class ToastAppearancePolicy
     {
         public const int MinCornerRadius = 0;
-        public const int MaxCornerRadius = 48;
+        public const int MaxCornerRadius = 64;
         public const int DefaultCornerRadius = 26;
 
         public const int MinPadding = 4;
@@ -17,6 +17,16 @@ namespace Cccc.Domain.Preferences
 
         public static int ClampPadding(int value) =>
             Math.Clamp(value, MinPadding, MaxPadding);
+
+        public static double ComputeCardHeight(ToastDisplayMode mode, int padding)
+        {
+            int pad = ClampPadding(padding);
+            bool showIcon = ToastDisplayPolicy.ShowsIcon(mode);
+            bool showLabel = ToastDisplayPolicy.ShowsLabel(mode);
+            bool showContent = ToastDisplayPolicy.ShowsContent(mode);
+            double contentH = (showLabel && showContent) ? 40 : (showLabel ? 22 : (showContent ? 18 : 32));
+            return Math.Max(contentH + 2 * pad, showIcon ? 32 + 2 * pad : 24 + 2 * pad);
+        }
 
         public static double ResolveCornerRadius(int cornerRadius, bool fullCornerRadius, double cardWidth, double cardHeight)
         {
