@@ -22,8 +22,10 @@ namespace Cccc.Application
                 Sequence = new(content.Sequence),
                 OwnerProcess = content.OwnerProcess,
                 Supported = content.Supported,
-                Preview = content.Preview,
-                TypeLabel = content.TypeLabel
+                ContentKind = (ClipboardPayloadKind)content.ContentKind,
+                TextPreview = content.TextPreview ?? "",
+                FileName = content.FileName ?? "",
+                FileCount = content.FileCount
             };
             return engine.Observe(snapshot, eventTime, now, ToDomain(foreground));
         }

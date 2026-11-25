@@ -55,6 +55,18 @@ namespace Cccc.Adapters.Outbound.Windows
                     else if (line == "shadow=off") result.Model.ShowShadow = false;
                     else if (line.StartsWith("font_family=", StringComparison.Ordinal))
                         result.Model.FontFamily = AppearanceBounds.NormalizeFontFamily(line.Substring("font_family=".Length));
+                    else if (line.StartsWith("position=", StringComparison.Ordinal))
+                        result.Model.Position = ParseWindowPosition(line.Substring("position=".Length));
+                    else if (line.StartsWith("offset_x=", StringComparison.Ordinal) &&
+                        int.TryParse(line.Substring("offset_x=".Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out int offsetX))
+                        result.Model.OffsetX = PositionBounds.ClampOffset(offsetX);
+                    else if (line.StartsWith("offset_y=", StringComparison.Ordinal) &&
+                        int.TryParse(line.Substring("offset_y=".Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out int offsetY))
+                        result.Model.OffsetY = PositionBounds.ClampOffset(offsetY);
+                    else if (line == "taskbar_adapt=on") result.Model.AdaptToTaskbar = true;
+                    else if (line == "taskbar_adapt=off") result.Model.AdaptToTaskbar = false;
+                    else if (line.StartsWith("language=", StringComparison.Ordinal))
+                        result.Model.Language = LanguageSettings.NormalizePreference(line.Substring("language=".Length));
                 }
             }
             catch (IOException error) when (error is FileNotFoundException or DirectoryNotFoundException)
@@ -116,7 +128,12 @@ namespace Cccc.Adapters.Outbound.Windows
                     "padding=" + AppearanceBounds.ClampPadding(model.Padding).ToString(CultureInfo.InvariantCulture) + Environment.NewLine +
                     (model.ShowBorder ? "border=on" : "border=off") + Environment.NewLine +
                     (model.ShowShadow ? "shadow=on" : "shadow=off") + Environment.NewLine +
-                    "font_family=" + AppearanceBounds.NormalizeFontFamily(model.FontFamily) + Environment.NewLine;
+                    "font_family=" + AppearanceBounds.NormalizeFontFamily(model.FontFamily) + Environment.NewLine +
+                    "position=" + FormatWindowPosition(model.Position) + Environment.NewLine +
+                    "offset_x=" + PositionBounds.ClampOffset(model.OffsetX).ToString(CultureInfo.InvariantCulture) + Environment.NewLine +
+                    "offset_y=" + PositionBounds.ClampOffset(model.OffsetY).ToString(CultureInfo.InvariantCulture) + Environment.NewLine +
+                    (model.AdaptToTaskbar ? "taskbar_adapt=on" : "taskbar_adapt=off") + Environment.NewLine +
+                    "language=" + LanguageSettings.NormalizePreference(model.Language) + Environment.NewLine;
                 File.WriteAllText(temporary, text);
                 if (File.Exists(target)) File.Replace(temporary, target, null);
                 else File.Move(temporary, target);
@@ -163,6 +180,36 @@ namespace Cccc.Adapters.Outbound.Windows
                 DisplayMode.ContentOnly => "content",
                 DisplayMode.LabelAndContent => "label_content",
                 _ => "full"
+            };
+        }
+
+        private static WindowPosition ParseWindowPosition(string value)
+        {
+            return value switch
+            {
+                "top_left" => WindowPosition.TopLeft,
+                "top_center" => WindowPosition.TopCenter,
+                "top_right" => WindowPosition.TopRight,
+                "middle_left" => WindowPosition.MiddleLeft,
+                "middle_right" => WindowPosition.MiddleRight,
+                "bottom_center" => WindowPosition.BottomCenter,
+                "bottom_right" => WindowPosition.BottomRight,
+                _ => WindowPosition.BottomLeft
+            };
+        }
+
+        private static string FormatWindowPosition(WindowPosition position)
+        {
+            return position switch
+            {
+                WindowPosition.TopLeft => "top_left",
+                WindowPosition.TopCenter => "top_center",
+                WindowPosition.TopRight => "top_right",
+                WindowPosition.MiddleLeft => "middle_left",
+                WindowPosition.MiddleRight => "middle_right",
+                WindowPosition.BottomCenter => "bottom_center",
+                WindowPosition.BottomRight => "bottom_right",
+                _ => "bottom_left"
             };
         }
     }

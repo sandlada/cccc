@@ -6,14 +6,16 @@ namespace Cccc.Application
         private readonly ISystemClock clock;
         private readonly IClipboardReader clipboard;
         private readonly IFeedbackPresenter presenter;
+        private readonly ILocalizer localizer;
 
         public ExpireAttemptHandler(FeedbackSession session, ISystemClock clock,
-            IClipboardReader clipboard, IFeedbackPresenter presenter)
+            IClipboardReader clipboard, IFeedbackPresenter presenter, ILocalizer localizer = null)
         {
             this.session = session;
             this.clock = clock;
             this.clipboard = clipboard;
             this.presenter = presenter;
+            this.localizer = localizer;
         }
 
         public FeedbackView Handle()
@@ -23,7 +25,7 @@ namespace Cccc.Application
             var feedback = session.Expire(now, sequence);
             if (feedback is null) return null;
 
-            FeedbackView view = FeedbackMapper.ToView(feedback);
+            FeedbackView view = FeedbackMapper.ToView(feedback, localizer);
             presenter.Present(view);
             return view;
         }

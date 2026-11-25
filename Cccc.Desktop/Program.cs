@@ -19,10 +19,12 @@ namespace Cccc.Desktop
         {
             if (args.Length == 1 && args[0] == "--uninstall") return Uninstall();
 
+            LocalizationService localizer = CreateEarlyLocalizer();
+
             if (args.Length == 2 && args[0] == "--render-preview")
             {
                 WpfApplication previewApp = new WpfApplication { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-                using (var sample = new ToastPresenter(new PreferencesModel(), previewApp.Dispatcher))
+                using (var sample = new ToastPresenter(new PreferencesModel(), previewApp.Dispatcher, localizer))
                 {
                     sample.RenderSample(args[1]);
                 }
@@ -38,7 +40,7 @@ namespace Cccc.Desktop
                 {
                     WindowsForms.Application.EnableVisualStyles();
                     WpfApplication app = new WpfApplication { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-                    using (DesktopHost host = new DesktopHost(app))
+                    using (DesktopHost host = new DesktopHost(app, localizer))
                     {
                         app.DispatcherUnhandledException += delegate(object sender,
                             DispatcherUnhandledExceptionEventArgs e)
@@ -57,11 +59,23 @@ namespace Cccc.Desktop
                 {
                     System.Diagnostics.Trace.TraceError("Cccc startup: {0} (0x{1:X8})",
                         error.GetType().Name, error.HResult);
-                    MessageBox.Show("Cccc 无法启动复制检测。请确认程序运行在正常的 Windows 桌面会话中，再重新打开。",
+                    MessageBox.Show(localizer.Get("error.startup_desktop_session"),
                         "Cccc", MessageBoxButton.OK, MessageBoxImage.Information);
                     return 1;
                 }
                 finally { single.ReleaseMutex(); }
+            }
+        }
+
+        private static LocalizationService CreateEarlyLocalizer()
+        {
+            try
+            {
+                return new LocalizationService(new WindowsSystemLanguageProvider());
+            }
+            catch (Exception)
+            {
+                return new LocalizationService();
             }
         }
 

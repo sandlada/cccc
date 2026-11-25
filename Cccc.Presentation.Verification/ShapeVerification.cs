@@ -85,8 +85,8 @@ namespace Cccc.Presentation.Verification
             {
                 Kind = FeedbackViewKind.Confirmed,
                 Count = count,
-                Title = FeedbackEngine.SuccessTitle(count),
-                Preview = "形状检查 g/y",
+                Title = FeedbackMapper.ResolveTitle(FeedbackEngine.SuccessTitleKey(count), null),
+                Preview = "Shape check g/y",
                 Foreground = new WindowTarget(),
             };
         }

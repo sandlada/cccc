@@ -8,6 +8,7 @@ using System.Windows.Threading;
 using Cccc.Adapters.Outbound.Toast.Wpf;
 using Cccc.Application;
 using Cccc.Domain.Feedback;
+using Cccc.Domain.Preferences;
 using Cccc.Platform.Windows;
 
 namespace Cccc.Presentation.Verification
@@ -32,7 +33,7 @@ namespace Cccc.Presentation.Verification
             timer.Tick += delegate { timer.Stop(); frame.Continue = false; }; timer.Start(); Dispatcher.PushFrame(frame);
         }
         private static FeedbackView Sample(int count)
-        { return new FeedbackView { Kind = FeedbackViewKind.Confirmed, Count = count, Title = FeedbackEngine.SuccessTitle(count), Preview = "动画检查 g/y", Foreground = new WindowTarget() }; }
+        { return new FeedbackView { Kind = FeedbackViewKind.Confirmed, Count = count, Title = FeedbackMapper.ResolveTitle(FeedbackEngine.SuccessTitleKey(count), null), Preview = "Animation check g/y", Foreground = new WindowTarget() }; }
         private static void Fade()
         {
             WindowFade fade = new WindowFade(); fade.BeginIn(0, 1000);
@@ -59,6 +60,20 @@ namespace Cccc.Presentation.Verification
             CopyMotion motion = new CopyMotion(); motion.Pulse(0);
             Verify(motion.Value(55) == 1 && CopyMotion.CardAmount == 0 && CopyMotion.CounterAmount == .18 && CopyMotion.Return == 155, "repeatPulseCounterOnlyAndTimingUnchanged");
             Verify(motion.Value(210) == 0 && !motion.Running, "repeatPulseFinishesAt210");
+
+            ToastWindowMotion winMotion = new ToastWindowMotion();
+            winMotion.SetDirection(ToastPosition.BottomLeft, 1.0, false);
+            winMotion.SnapPosition(100, 200);
+            winMotion.Reset(0);
+            Verify(winMotion.RenderY > 200 && winMotion.Scale < 1.0, "popOutStartsOffsetAndScaled");
+            winMotion.BeginIn(0, 1000);
+            winMotion.Advance(1400);
+            Verify(winMotion.Opacity == 1 && Near(winMotion.Scale, 1.0) && Near(winMotion.RenderY, 200), "popInSettlesToTarget");
+            winMotion.SetTargetPosition(100, 150, 2000);
+            winMotion.Advance(2050);
+            Verify(winMotion.CurrentY < 200 && winMotion.CurrentY > 150, "positionSpringGlidesSmoothly");
+            winMotion.Advance(2600);
+            Verify(Near(winMotion.CurrentY, 150) && !winMotion.Running, "positionSpringSettles");
         }
         private static void EntryAndRepeat()
         {
@@ -72,8 +87,8 @@ namespace Cccc.Presentation.Verification
                 Verify(toast.TestBadgeSpinRunning, "badgeSpinStartsWithCard");
                 Verify(Field<SampledText>(toast, "title").BuildCount > 0, "firstTitlePreparedBeforeFade");
                 Frame(toast);
-                Verify(!toast.TestMotionRunning && toast.TestScale == 1 && !toast.TestBadgeMotionRunning && Field<WindowFade>(toast, "windowFade").Running, "firstFrameHasFadeWithoutScale");
-                Pump(240); Verify(toast.Opacity == 1 && !toast.TestFramesRunning, "firstFadeStopsCallbacks");
+                Verify(!toast.TestMotionRunning && Field<ToastWindowMotion>(toast, "windowMotion").Running, "firstFrameStartsEntranceMotion");
+                Pump(450); Verify(toast.Opacity == 1 && !toast.TestFramesRunning, "firstFadeStopsCallbacks");
                 Verify(toast.TestBadgeSpinAngle > 2, "badgeSpinsWithoutCopy angle=" + toast.TestBadgeSpinAngle.ToString("F1"));
                 double spinBeforeCopy = toast.TestBadgeSpinAngle;
                 toast.CopyPressed(2, IntPtr.Zero, true);
@@ -102,10 +117,10 @@ namespace Cccc.Presentation.Verification
                 toast.CopyPressed(1, IntPtr.Zero, true); toast.Present(Sample(1), true);
                 Verify(!toast.TestPendingHit && !toast.TestMotionRunning, "firstKeyOverStatusDoesNotPulse");
                 Frame(toast); Pump(240);
-                WindowFade fade = Field<WindowFade>(toast, "windowFade");
-                toast.Opacity = .4; fade.BeginOut(.4, WindowsNativeMethods.MonotonicMilliseconds);
+                ToastWindowMotion winMotion = Field<ToastWindowMotion>(toast, "windowMotion");
+                toast.Opacity = .4; winMotion.BeginOut(.4, WindowsNativeMethods.MonotonicMilliseconds);
                 toast.CopyPressed(2, IntPtr.Zero, true); Frame(toast);
-                Verify(!fade.FadingOut && Near(toast.Opacity, .4) && toast.TestMotionRunning, "repeatDuringFadeOutRestoresWithoutJump");
+                Verify(!winMotion.FadingOut && Near(toast.Opacity, .4) && toast.TestMotionRunning, "repeatDuringFadeOutRestoresWithoutJump");
                 toast.HideAndClear();
             }
             finally { toast.Close(); }

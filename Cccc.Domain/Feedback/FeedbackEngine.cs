@@ -87,10 +87,10 @@ namespace Cccc.Domain.Feedback
                 {
                     confirmed = snapshot;
                     return FromSnapshot(snapshot, FeedbackKind.Confirmed,
-                        SuccessTitle(attempt.Count), attempt.Count, attempt.Window);
+                        SuccessTitleKey(attempt.Count), attempt.Count, attempt.Window);
                 }
                 confirmed = null;
-                return FromSnapshot(snapshot, FeedbackKind.Updated, "剪贴板已更新", 0, foreground);
+                return FromSnapshot(snapshot, FeedbackKind.Updated, FeedbackTitleKey.ClipboardUpdated, 0, foreground);
             }
 
             // No Ctrl+C: e.g. a context-menu copy, screenshot, or another app.
@@ -98,7 +98,7 @@ namespace Cccc.Domain.Feedback
             confirmed = null;
             lastPress = -10000;
             return FromSnapshot(snapshot, snapshot.Supported ? FeedbackKind.Confirmed : FeedbackKind.Updated,
-                snapshot.Supported ? "已复制" : "剪贴板已更新", 0, foreground);
+                snapshot.Supported ? FeedbackTitleKey.Copied : FeedbackTitleKey.ClipboardUpdated, 0, foreground);
         }
 
         public Feedback Expire(long now, ClipboardSequence currentSequence)
@@ -113,42 +113,43 @@ namespace Cccc.Domain.Feedback
             pending = null;
             if (confirmed is not null && confirmed.Sequence == currentSequence &&
                 confirmed.Sequence == attempt.Baseline)
-                return FromSnapshot(confirmed, FeedbackKind.Retained, "刚才的内容仍在剪贴板",
+                return FromSnapshot(confirmed, FeedbackKind.Retained, FeedbackTitleKey.RetainedPrevious,
                     attempt.Count, attempt.Window);
             confirmed = null;
             return new()
             {
                 Kind = FeedbackKind.Unconfirmed,
-                Title = "未检测到新的复制结果",
-                Preview = "可重新选择内容后再试一次",
-                TypeLabel = "本次复制尚未确认",
+                TitleKey = FeedbackTitleKey.Unconfirmed,
+                ContentKind = ClipboardPayloadKind.Unsupported,
                 Count = attempt.Count,
                 Foreground = attempt.Window
             };
         }
 
         private static Feedback FromSnapshot(ClipboardSnapshot value, FeedbackKind kind,
-            string title, int count, WindowIdentity foreground)
+            FeedbackTitleKey titleKey, int count, WindowIdentity foreground)
         {
             return new()
             {
                 Kind = kind,
-                Title = title,
-                Preview = value.Preview,
-                TypeLabel = value.TypeLabel,
+                TitleKey = titleKey,
+                ContentKind = value.ContentKind,
+                TextPreview = value.TextPreview ?? "",
+                FileName = value.FileName ?? "",
+                FileCount = value.FileCount,
                 Count = count,
                 Foreground = foreground
             };
         }
 
-        public static string SuccessTitle(int times) => times switch
+        public static FeedbackTitleKey SuccessTitleKey(int times) => times switch
         {
-            1 => "已复制",
-            2 => "还在呢",
-            3 => "真的复制好了",
-            4 => "千真万确复制好了",
-            >= 5 => "去粘贴吧",
-            _ => "已复制"
+            1 => FeedbackTitleKey.Copied,
+            2 => FeedbackTitleKey.StillThere,
+            3 => FeedbackTitleKey.ReallyCopied,
+            4 => FeedbackTitleKey.DefinitelyCopied,
+            >= 5 => FeedbackTitleKey.GoPaste,
+            _ => FeedbackTitleKey.Copied
         };
     }
 }

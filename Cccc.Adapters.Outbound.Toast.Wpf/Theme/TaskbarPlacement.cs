@@ -6,6 +6,7 @@ using System.Threading;
 using System.Windows;
 using System.Windows.Automation;
 
+using Cccc.Application;
 using Cccc.Platform.Windows;
 
 namespace Cccc.Adapters.Outbound.Toast.Wpf
@@ -31,8 +32,8 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
         private static bool busy;
         private static int generation;
         private static long lastRequest = -10000;
-        private static string lastDecision = "等待首次显示";
-        internal static string LastDecision { get { return lastDecision; } }
+        private static TaskbarPlacementDecision lastDecision = TaskbarPlacementDecision.WaitingFirstShow;
+        internal static TaskbarPlacementDecision LastDecision { get { return lastDecision; } }
 
         internal static void Invalidate()
         {
@@ -134,10 +135,10 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             WindowsNativeMethods.WindowRectangle bounds;
             if (window != IntPtr.Zero && IsWindowVisible(window) && WindowsNativeMethods.GetWindowRect(window, out bounds)) bar = ToRect(bounds);
             Rect[] occupied = value != null && SameMonitor(monitor, value.Monitor) && value.Bar == bar ? value.Occupied : null;
-            string decision;
+            TaskbarPlacementDecision decision;
             Point result = ResolveForBar(ToRect(monitor), ToRect(work), bar, occupied, dpi / 96.0, out decision);
-            if (occupied != null && WindowsNativeMethods.MonotonicMilliseconds - value.Time > 5000 && decision == "任务栏内（避让已识别控件）")
-                decision = "任务栏内（沿用上次空位，后台更新）";
+            if (occupied != null && WindowsNativeMethods.MonotonicMilliseconds - value.Time > 5000 && decision == TaskbarPlacementDecision.InsideAvoidingControls)
+                decision = TaskbarPlacementDecision.InsideCachedRefreshing;
             lastDecision = decision;
             return result;
         }
@@ -152,15 +153,15 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
 
         // Pure decision logic used by the offscreen checks. Unknown controls
         // deliberately use a trial anchor, not a claim of a verified empty slot.
-        internal static Point ResolveForBar(Rect monitor, Rect work, Rect bar, Rect[] occupied, double scale, out string decision)
+        internal static Point ResolveForBar(Rect monitor, Rect work, Rect bar, Rect[] occupied, double scale, out TaskbarPlacementDecision decision)
         {
             Point fallback = new Point(work.Left + 16 * scale, work.Bottom - 42 * scale);
             if (!ValidBottomBar(monitor, work, bar))
-            { decision = "上方（任务栏不在此屏、隐藏或边界未知）"; return fallback; }
+            { decision = TaskbarPlacementDecision.AboveNotOnMonitorOrHidden; return fallback; }
             Point inside;
             if (!TryFindSlot(bar, occupied ?? new Rect[0], scale, out inside))
-            { decision = "上方（高度或空位不足）"; return fallback; }
-            decision = occupied == null ? "任务栏内（左侧试验锚点，尚未确认空位）" : "任务栏内（避让已识别控件）";
+            { decision = TaskbarPlacementDecision.AboveInsufficientSpace; return fallback; }
+            decision = occupied == null ? TaskbarPlacementDecision.InsideTrialAnchor : TaskbarPlacementDecision.InsideAvoidingControls;
             return inside;
         }
 

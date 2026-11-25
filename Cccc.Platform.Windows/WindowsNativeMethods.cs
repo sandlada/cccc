@@ -36,6 +36,21 @@ namespace Cccc.Platform.Windows
             public uint Flags;
         }
 
+        [StructLayout(LayoutKind.Sequential)]
+        public struct AppBarData
+        {
+            public uint Size;
+            public IntPtr WindowHandle;
+            public uint CallbackMessage;
+            public uint Edge;
+            public WindowRectangle Rect;
+            public IntPtr LParam;
+        }
+
+        public const uint AbmGetState = 0x00000004;
+        public const uint AbmGetTaskbarPos = 0x00000005;
+        public const uint AbsAutoHide = 0x00000001;
+
         [DllImport("user32.dll", SetLastError = true)]
         public static extern bool AddClipboardFormatListener(IntPtr windowHandle);
         [DllImport("dwmapi.dll")]
@@ -100,6 +115,20 @@ namespace Cccc.Platform.Windows
         public static extern bool GetMonitorInfo(IntPtr monitorHandle, ref MonitorInformation information);
         [DllImport("user32.dll")]
         private static extern uint GetDpiForWindow(IntPtr windowHandle);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        public static extern IntPtr FindWindow(string className, string windowName);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        public static extern IntPtr FindWindowEx(IntPtr parentHandle, IntPtr childAfter, string className, string windowName);
+        [DllImport("user32.dll")]
+        public static extern bool IsWindowVisible(IntPtr windowHandle);
+        [DllImport("shell32.dll")]
+        public static extern uint SHAppBarMessage(uint message, ref AppBarData data);
+
+        public static bool IsTaskbarAutoHide()
+        {
+            AppBarData data = new AppBarData { Size = (uint)Marshal.SizeOf(typeof(AppBarData)) };
+            return (SHAppBarMessage(AbmGetState, ref data) & AbsAutoHide) != 0;
+        }
 
         public static long MonotonicMilliseconds
         {

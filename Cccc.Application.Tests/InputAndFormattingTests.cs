@@ -20,7 +20,8 @@ namespace Cccc.Application.Tests
         [Fact]
         public void Preview_text_sanitizes_and_bounds_untrusted_clipboard_text()
         {
-            Assert.Equal("空白文字", PreviewText.Shorten(null));
+            Assert.Equal("", PreviewText.Shorten(null));
+            Assert.Equal("", PreviewText.Shorten("   \r\n\t "));
             Assert.Equal("a b", PreviewText.Shorten(" a\r\n b "));
             Assert.Equal("ab", PreviewText.Shorten("a\u202eb"));
             Assert.Equal(new string('x', 36) + "…", PreviewText.Shorten(new string('x', 37)));

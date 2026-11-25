@@ -26,6 +26,11 @@ namespace Cccc.Application
             if (command.ShowBorder is { } showBorder) model.ShowBorder = showBorder;
             if (command.ShowShadow is { } showShadow) model.ShowShadow = showShadow;
             if (command.FontFamily is { } fontFamily) model.FontFamily = ToastAppearancePolicy.NormalizeFontFamily(fontFamily);
+            if (command.Position is { } position) model.Position = position;
+            if (command.OffsetX is { } offsetX) model.OffsetX = ToastPlacementPolicy.ClampOffset(offsetX);
+            if (command.OffsetY is { } offsetY) model.OffsetY = ToastPlacementPolicy.ClampOffset(offsetY);
+            if (command.AdaptToTaskbar is { } adaptToTaskbar) model.AdaptToTaskbar = adaptToTaskbar;
+            if (command.Language is { } language) model.Language = LanguageSettings.NormalizePreference(language);
 
             bool saved = preferences.Save(out string error);
             return new()

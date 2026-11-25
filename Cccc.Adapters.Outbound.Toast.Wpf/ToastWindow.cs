@@ -45,9 +45,16 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
         private readonly CopyMotion motion = new CopyMotion();
         private readonly CounterExpandMotion counterExpand = new CounterExpandMotion();
         private readonly TitleTransition titleTransition = new TitleTransition();
-        private readonly WindowFade windowFade = new WindowFade();
+        private readonly ToastWindowMotion windowMotion = new ToastWindowMotion();
         private readonly ScaleTransform countScale = new ScaleTransform(1, 1);
+        private readonly ScaleTransform windowScale = new ScaleTransform(1, 1);
         private ToastDisplayMode displayMode = ToastDisplayMode.Full;
+        private ToastPosition windowPosition = ToastPosition.BottomLeft;
+        private int offsetX;
+        private int offsetY;
+        private bool adaptToTaskbar = true;
+        private ScreenRect lastEffectiveWorkArea;
+        private readonly DispatcherTimer taskbarWatchTimer;
         private int cornerRadius = ToastAppearancePolicy.DefaultCornerRadius;
         private bool fullCornerRadius;
         private int counterCornerRadius = ToastAppearancePolicy.DefaultCounterCornerRadius;
@@ -55,6 +62,8 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
         private int cardPadding = ToastAppearancePolicy.DefaultPadding;
         private bool showBorder = true;
         private bool showShadow = true;
+        private readonly ILocalizer localizer;
+        private string configuredFontFamily = ToastAppearancePolicy.DefaultFontFamily;
         private FontFamily toastFontFamily = EmbeddedFonts.Family;
         private int maxOuterWidth = CardBackgroundRenderer.LogicalWidth;
         private int maxOuterHeight = CardBackgroundRenderer.LogicalHeight;
@@ -131,12 +140,13 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             return geometry;
         }
 
-        internal ToastWindow() : this(Themes.MaterialEnabled) { }
-        internal ToastWindow(bool materialEnabled)
+        internal ToastWindow() : this(Themes.MaterialEnabled, null) { }
+        internal ToastWindow(bool materialEnabled, ILocalizer localizer = null)
         {
+            this.localizer = localizer ?? new LocalizationService();
             Themes.MaterialEnabled = materialEnabled;
             if (ToastProfile.Compact) Themes.MaterialAvailable = false;
-            Title = "Cccc " + ToastProfile.Label + " · 复制提示";
+            Title = this.localizer.Format("toast.window_title", ToastProfile.Label);
             Width = OuterWidth; Height = OuterHeight;
             WindowStyle = WindowStyle.None; ResizeMode = ResizeMode.NoResize;
             AllowsTransparency = true; Background = Brushes.Transparent;
@@ -149,7 +159,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
             TextOptions.SetTextRenderingMode(this, TextRenderingMode.Grayscale);
             TextOptions.SetTextHintingMode(this, TextHintingMode.Fixed);
-            surface = new Grid { Width = maxOuterWidth, Height = maxOuterHeight };
+            surface = new Grid { Width = maxOuterWidth, Height = maxOuterHeight, RenderTransform = windowScale, RenderTransformOrigin = new Point(0.5, 0.5) };
             background = new Image { HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Top, Stretch = Stretch.Fill, SnapsToDevicePixels = true };
             RenderOptions.SetBitmapScalingMode(background, BitmapScalingMode.NearestNeighbor);
@@ -228,6 +238,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             // do not rely on a window-level setting reaching every text visual.
             foreach (SampledText text in glyphs)
             {
+                text.Culture = this.localizer.CurrentCulture;
                 TextOptions.SetTextFormattingMode(text, TextFormattingMode.Display);
                 TextOptions.SetTextRenderingMode(text, TextRenderingMode.Grayscale);
                 TextOptions.SetTextHintingMode(text, TextHintingMode.Fixed);
@@ -249,7 +260,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                     if (message == 0x21) { handled = true; return new IntPtr(3); }
                     if (message == 0x84) { handled = true; return new IntPtr(-1); }
                     if (message == 0x007E || message == 0x001A || message == TaskbarPlacement.RecreatedMessage)
-                    { TaskbarPlacement.Invalidate(); taskbarSpotPinned = false; }
+                    { TaskbarPlacement.Invalidate(); taskbarSpotPinned = false; CheckTaskbarChange(); }
                     if (message == 0x02E0 || message == 0x007E || message == 0x001A) QueueDpiRefresh();
                     // WPF must process WM_DPICHANGED itself; do not mark it handled.
                     return IntPtr.Zero;
@@ -258,13 +269,15 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             Closed += delegate
             {
                 closed = true; pendingEntrance = pendingHit = deferredPulse = false;
-                revision++; hideTimer.Stop(); motion.Stop(); windowFade.Reset(0); StopFrames();
+                revision++; hideTimer.Stop(); taskbarWatchTimer.Stop(); motion.Stop(); windowMotion.Reset(0); StopFrames();
                 foreach (SampledText text in glyphs) text.ClearCache();
                 textPixels.Release();
                 if (acrylic != null) acrylic.Dispose();
             };
             hideTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
             hideTimer.Tick += delegate { FadeOut(); };
+            taskbarWatchTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
+            taskbarWatchTimer.Tick += delegate { CheckTaskbarChange(); };
             RecalculateCardGeometry();
         }
 
@@ -279,7 +292,32 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             cardPadding = preferences.Padding;
             showBorder = preferences.ShowBorder;
             showShadow = preferences.ShowShadow;
-            FontFamily nextFont = EmbeddedFonts.ResolveFontFamily(preferences.FontFamily);
+            windowPosition = (ToastPosition)preferences.Position;
+            offsetX = preferences.OffsetX;
+            offsetY = preferences.OffsetY;
+            adaptToTaskbar = preferences.AdaptToTaskbar;
+            configuredFontFamily = preferences.FontFamily;
+            ApplyTypographyForCurrentLanguage();
+            RecalculateCardGeometry();
+            if (windowHandle != IntPtr.Zero) Position(anchorWindow, snap: !IsVisible);
+            if (IsVisible && Current != null) PrepareVisibleText();
+        }
+
+        internal void ApplyLanguage()
+        {
+            if (closed) return;
+            Title = localizer.Format("toast.window_title", ToastProfile.Label);
+            foreach (SampledText text in glyphs)
+                text.Culture = localizer.CurrentCulture;
+            ApplyTypographyForCurrentLanguage();
+            if (IsVisible && Current != null) PrepareVisibleText();
+        }
+
+        private void ApplyTypographyForCurrentLanguage()
+        {
+            FontFamily nextFont = EmbeddedFonts.ResolveFontFamily(
+                configuredFontFamily,
+                localizer.CurrentLanguage?.FontFamily);
             if (!Equals(toastFontFamily, nextFont))
             {
                 toastFontFamily = nextFont;
@@ -288,9 +326,6 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                 detail.FontFamily = nextFont;
                 symbol.FontFamily = nextFont;
             }
-            RecalculateCardGeometry();
-            if (windowHandle != IntPtr.Zero) Position(anchorWindow);
-            if (IsVisible && Current != null) PrepareVisibleText();
         }
 
         private void RecalculateCardGeometry()
@@ -528,7 +563,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
         internal void CopyPressed(int count, IntPtr foreground, bool preview)
         { CopyPressed(count, foreground, preview, WindowsNativeMethods.MonotonicMilliseconds); }
 
-        internal void CopyPressed(int count, IntPtr foreground, bool preview, long pressedAt, string countText = null)
+        internal void CopyPressed(int count, IntPtr foreground, bool preview, long pressedAt, string countText = null, string expectedTitle = null)
         {
             if (closed) return;
             lastCopySignal = WindowsNativeMethods.MonotonicMilliseconds;
@@ -545,7 +580,10 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             revision++;
             // Signal title motion before content layout, positioning, or any
             // asynchronous clipboard read. Do not choose an unverified title.
-            if (titleTransition.Target != FeedbackEngine.SuccessTitle(count))
+            string targetTitle = string.IsNullOrEmpty(expectedTitle)
+                ? FeedbackMapper.ResolveTitle(FeedbackEngine.SuccessTitleKey(count), localizer)
+                : expectedTitle;
+            if (titleTransition.Target != targetTitle)
             {
                 titleTransition.Prepare(lastCopySignal);
                 ApplyTitleFrame(); StartFrames();
@@ -596,8 +634,8 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
 
         private void RestoreFade()
         {
-            if (windowFade.FadingOut || (!windowFade.Running && Opacity < 1))
-                windowFade.BeginIn(Opacity, WindowsNativeMethods.MonotonicMilliseconds);
+            if (windowMotion.FadingOut || (!windowMotion.FadeRunning && Opacity < 1))
+                windowMotion.BeginIn(Opacity, WindowsNativeMethods.MonotonicMilliseconds);
         }
 
         private void LayoutCounter()
@@ -618,7 +656,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             hideTimer.Stop();
             bool alreadyVisible = IsVisible && !pendingEntrance;
             bool animateTitle = alreadyVisible && !(Current != null && Current.Kind == FeedbackViewKind.Status && value.Kind != FeedbackViewKind.Status);
-            if (!alreadyVisible) { Opacity = 0; windowFade.Reset(0); }
+            if (!alreadyVisible) { Opacity = 0; windowMotion.Reset(0); }
             SetContent(value, preview);
             bool wantsCounter = value.Kind != FeedbackViewKind.Status && value.Count >= 2;
             if (!alreadyVisible) counterExpand.Snap(wantsCounter ? 1 : 0);
@@ -626,15 +664,17 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             ApplyCardWidthFrame();
             UpdateTitle(value.Title, animateTitle);
             // Position and build for the real target DPI while the new card is hidden.
-            Position(value.Foreground == null ? IntPtr.Zero : new IntPtr(value.Foreground.Handle));
+            Position(value.Foreground == null ? IntPtr.Zero : new IntPtr(value.Foreground.Handle), snap: !alreadyVisible);
             if (!alreadyVisible)
             {
                 pendingEntrance = true;
-                if (HasNativeMaterial) acrylic.SetMotion(1, 0);
+                if (HasNativeMaterial) acrylic.SetMotion(windowMotion.Scale, 0);
                 if (!IsVisible) Show();
                 // Ensure WPF's source/visual DPI is fully committed after first Show.
-                Position(value.Foreground == null ? IntPtr.Zero : new IntPtr(value.Foreground.Handle));
+                Position(value.Foreground == null ? IntPtr.Zero : new IntPtr(value.Foreground.Handle), snap: true);
             }
+            if (!ToastProfile.Compact && adaptToTaskbar) taskbarWatchTimer.Start();
+            else taskbarWatchTimer.Stop();
             if (playHit) PlayHit();
             // The blob keeps turning while the card is visible, so the badge
             // reads as alive even between copies. Repeated Present calls do not
@@ -672,7 +712,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             ApplyCardWidthFrame();
         }
 
-        internal void Position(IntPtr foreground)
+        internal void Position(IntPtr foreground, bool snap = true)
         {
             if (closed || positioning) return;
             positioning = true;
@@ -689,42 +729,21 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                 int dpi = EffectiveDpi();
                 double scale = dpi / 96.0;
                 int width = (int)Math.Round(maxOuterWidth * scale), height = (int)Math.Round(maxOuterHeight * scale);
-                int x = info.Work.Left + (int)Math.Round(-12 * scale);
-                int y = info.Work.Bottom - height + (int)Math.Round(12 * scale);
-                if (ToastProfile.Compact)
+                (double targetX, double targetY) = ComputeTargetOrigin(monitor, info, dpi, scale);
+                windowMotion.SetDirection(windowPosition, scale, ToastProfile.Compact);
+                if (snap || !IsVisible || PreviewPositionProvider != null)
                 {
-                    TaskbarPlacement.RequestRefresh();
-                    // A background result must not move an ongoing copy sequence.
-                    if (!IsVisible || !taskbarSpotPinned || taskbarMonitor != monitor || taskbarDpi != dpi)
-                    {
-                        taskbarSpot = TaskbarPlacement.Resolve(info.Monitor, info.Work, dpi);
-                        taskbarSpotPinned = true; taskbarMonitor = monitor; taskbarDpi = dpi;
-                    }
-                    x = (int)Math.Round(taskbarSpot.X - 32 * scale);
-                    y = (int)Math.Round(taskbarSpot.Y - 32 * scale);
+                    windowMotion.SnapPosition(targetX, targetY);
                 }
-                if (PreviewPositionProvider != null)
+                else
                 {
-                    Point? previewPosition = PreviewPositionProvider(new Size(maxOuterWidth, maxOuterHeight));
-                    if (previewPosition.HasValue)
-                    {
-                        x = (int)Math.Round(previewPosition.Value.X * scale);
-                        y = (int)Math.Round(previewPosition.Value.Y * scale);
-                    }
+                    windowMotion.SetTargetPosition(targetX, targetY, WindowsNativeMethods.MonotonicMilliseconds);
+                    StartFrames();
                 }
-                if (acrylic != null)
-                {
-                    try
-                    {
-                        double currentCardW = ToastProfile.Compact ? 225 : baseCardWidth + (expandedCardWidth - baseCardWidth) * counterExpand.Progress;
-                        acrylic.Position(x, y, width, height, dpi, resolvedCornerExtent, currentCardW + 64);
-                    }
-                    catch (Exception error) { MaterialFault(error); }
-                }
-                WindowsNativeMethods.WindowRectangle currentBounds;
-                if (!WindowsNativeMethods.GetWindowRect(handle, out currentBounds) || currentBounds.Left != x || currentBounds.Top != y ||
-                    currentBounds.Right - currentBounds.Left != width || currentBounds.Bottom - currentBounds.Top != height)
-                    WindowsNativeMethods.SetWindowPos(handle, IntPtr.Zero, x, y, width, height, 0x0010 | 0x0200 | 0x0004);
+
+                int x = (int)Math.Round(windowMotion.RenderX);
+                int y = (int)Math.Round(windowMotion.RenderY);
+                ApplyWindowBounds(handle, x, y, width, height, dpi);
                 dpi = EffectiveDpi();
                 ApplyBackground(dpi, VisualTreeHelper.GetDpi(this).DpiScaleX);
                 if (acrylic != null)
@@ -734,6 +753,75 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                 }
             }
             finally { positioning = false; }
+        }
+
+        private (double X, double Y) ComputeTargetOrigin(
+            IntPtr monitor,
+            WindowsNativeMethods.MonitorInformation info,
+            int dpi,
+            double scale)
+        {
+            if (PreviewPositionProvider != null)
+            {
+                Point? previewPosition = PreviewPositionProvider(new Size(maxOuterWidth, maxOuterHeight));
+                if (previewPosition.HasValue)
+                    return (previewPosition.Value.X * scale, previewPosition.Value.Y * scale);
+            }
+
+            if (ToastProfile.Compact)
+            {
+                TaskbarPlacement.RequestRefresh();
+                // A background result must not move an ongoing copy sequence.
+                if (!IsVisible || !taskbarSpotPinned || taskbarMonitor != monitor || taskbarDpi != dpi)
+                {
+                    taskbarSpot = TaskbarPlacement.Resolve(info.Monitor, info.Work, dpi);
+                    taskbarSpotPinned = true; taskbarMonitor = monitor; taskbarDpi = dpi;
+                }
+                return (taskbarSpot.X - 32 * scale, taskbarSpot.Y - 32 * scale);
+            }
+
+            ScreenRect effectiveWork = TaskbarGeometry.GetEffectiveWorkArea(info.Monitor, info.Work, adaptToTaskbar, scale);
+            lastEffectiveWorkArea = effectiveWork;
+            double currentCardW = baseCardWidth + (expandedCardWidth - baseCardWidth) * counterExpand.Progress;
+            ScreenPoint cardTopLeft = ToastPlacementPolicy.ComputeCardTopLeft(
+                windowPosition, effectiveWork, currentCardW * scale, cardHeight * scale, offsetX, offsetY, scale);
+            return (cardTopLeft.X - 32 * scale, cardTopLeft.Y - 32 * scale);
+        }
+
+        private void ApplyWindowBounds(IntPtr handle, int x, int y, int width, int height, int dpi)
+        {
+            if (acrylic != null)
+            {
+                try
+                {
+                    double currentCardW = ToastProfile.Compact ? 225 : baseCardWidth + (expandedCardWidth - baseCardWidth) * counterExpand.Progress;
+                    acrylic.Position(x, y, width, height, dpi, resolvedCornerExtent, currentCardW + 64);
+                }
+                catch (Exception error) { MaterialFault(error); }
+            }
+            WindowsNativeMethods.WindowRectangle currentBounds;
+            if (!WindowsNativeMethods.GetWindowRect(handle, out currentBounds) || currentBounds.Left != x || currentBounds.Top != y ||
+                currentBounds.Right - currentBounds.Left != width || currentBounds.Bottom - currentBounds.Top != height)
+                WindowsNativeMethods.SetWindowPos(handle, IntPtr.Zero, x, y, width, height, 0x0010 | 0x0200 | 0x0004);
+        }
+
+        private void CheckTaskbarChange()
+        {
+            if (closed || !IsVisible || ToastProfile.Compact || !adaptToTaskbar || PreviewPositionProvider != null || windowHandle == IntPtr.Zero)
+                return;
+            IntPtr monitor = WindowsNativeMethods.MonitorFromWindow(anchorWindow, 2);
+            WindowsNativeMethods.MonitorInformation info = new WindowsNativeMethods.MonitorInformation { Size = (uint)Marshal.SizeOf(typeof(WindowsNativeMethods.MonitorInformation)) };
+            if (!WindowsNativeMethods.GetMonitorInfo(monitor, ref info)) return;
+            int dpi = EffectiveDpi();
+            double scale = dpi / 96.0;
+            ScreenRect effectiveWork = TaskbarGeometry.GetEffectiveWorkArea(info.Monitor, info.Work, adaptToTaskbar, scale);
+            if (effectiveWork == lastEffectiveWorkArea) return;
+            lastEffectiveWorkArea = effectiveWork;
+            double currentCardW = baseCardWidth + (expandedCardWidth - baseCardWidth) * counterExpand.Progress;
+            ScreenPoint cardTopLeft = ToastPlacementPolicy.ComputeCardTopLeft(
+                windowPosition, effectiveWork, currentCardW * scale, cardHeight * scale, offsetX, offsetY, scale);
+            windowMotion.SetTargetPosition(cardTopLeft.X - 32 * scale, cardTopLeft.Y - 32 * scale, WindowsNativeMethods.MonotonicMilliseconds);
+            StartFrames();
         }
 
         private void QueueDpiRefresh()
@@ -750,7 +838,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
         private void FadeOut()
         {
             hideTimer.Stop();
-            windowFade.BeginOut(Opacity, WindowsNativeMethods.MonotonicMilliseconds); StartFrames();
+            windowMotion.BeginOut(Opacity, WindowsNativeMethods.MonotonicMilliseconds); StartFrames();
         }
 
         private void StartHideTimer()
@@ -784,9 +872,9 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             if (pendingEntrance)
             {
                 pendingEntrance = false;
-                windowFade.BeginIn(Opacity, now); StartHideTimer();
+                windowMotion.BeginIn(Opacity, now); StartHideTimer();
             }
-            else if (pendingHit && windowFade.FadingOut) windowFade.BeginIn(Opacity, now);
+            else if (pendingHit && windowMotion.FadingOut) windowMotion.BeginIn(Opacity, now);
             bool badgeHit = pendingHit;
             bool badgeWasRunning = badgeMotion.IsRunning;
             if (pendingHit)
@@ -824,20 +912,46 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             titleTransition.Advance(now); ApplyTitleFrame();
             bool expandWasRunning = counterExpand.Running;
             counterExpand.Advance(now);
-            if (expandWasRunning || counterExpand.Running) ApplyCardWidthFrame();
-            countScale.ScaleX = countScale.ScaleY = 1 + CopyMotion.CounterAmount * value;
-            if (windowFade.Running)
+            if (expandWasRunning || counterExpand.Running)
             {
-                windowFade.Advance(now); Opacity = windowFade.Opacity;
-                if (!windowFade.Running && windowFade.FadingOut) { HideAndClear(); return; }
+                ApplyCardWidthFrame();
+                if (!ToastProfile.Compact && PreviewPositionProvider == null && windowHandle != IntPtr.Zero)
+                {
+                    IntPtr monitor = WindowsNativeMethods.MonitorFromWindow(anchorWindow, 2);
+                    WindowsNativeMethods.MonitorInformation info = new WindowsNativeMethods.MonitorInformation { Size = (uint)Marshal.SizeOf(typeof(WindowsNativeMethods.MonitorInformation)) };
+                    if (WindowsNativeMethods.GetMonitorInfo(monitor, ref info))
+                    {
+                        int dpi = EffectiveDpi();
+                        double scale = dpi / 96.0;
+                        (double tx, double ty) = ComputeTargetOrigin(monitor, info, dpi, scale);
+                        windowMotion.SnapPosition(tx, ty);
+                    }
+                }
+            }
+            countScale.ScaleX = countScale.ScaleY = 1 + CopyMotion.CounterAmount * value;
+            bool windowMotionWasRunning = windowMotion.Running;
+            if (windowMotionWasRunning)
+            {
+                windowMotion.Advance(now);
+                Opacity = windowMotion.Opacity;
+                double activeScale = ToastProfile.Compact ? 1.0 : windowMotion.Scale;
+                windowScale.ScaleX = windowScale.ScaleY = activeScale;
+                if (windowHandle != IntPtr.Zero)
+                {
+                    int dpi = EffectiveDpi();
+                    double scale = dpi / 96.0;
+                    int width = (int)Math.Round(maxOuterWidth * scale), height = (int)Math.Round(maxOuterHeight * scale);
+                    ApplyWindowBounds(windowHandle, (int)Math.Round(windowMotion.RenderX), (int)Math.Round(windowMotion.RenderY), width, height, dpi);
+                }
+                if (!windowMotion.FadeRunning && windowMotion.FadingOut) { HideAndClear(); return; }
             }
             if (acrylic != null)
             {
-                try { acrylic.SetMotion(1, Opacity); }
+                try { acrylic.SetMotion(ToastProfile.Compact ? 1.0 : windowMotion.Scale, Opacity); }
                 catch (Exception error) { MaterialFault(error); ApplyBackground(EffectiveDpi(), VisualTreeHelper.GetDpi(this).DpiScaleX); }
             }
             times.Moving = motion.Running;
-            if (!motion.Running && !badgeMotion.IsRunning && !windowFade.Running &&
+            if (!motion.Running && !badgeMotion.IsRunning && !windowMotion.Running &&
                 !titleTransition.Running && !counterExpand.Running && !pendingHit && !pendingEntrance) StopFrames();
         }
 
@@ -846,7 +960,9 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             deferredPulse = pendingEntrance = pendingHit = false;
             revision++;
             hideTimer.Stop();
-            windowFade.Reset(0); motion.Stop(); counterExpand.Snap(0); StopFrames();
+            taskbarWatchTimer.Stop();
+            windowMotion.Reset(0); motion.Stop(); counterExpand.Snap(0); StopFrames();
+            windowScale.ScaleX = windowScale.ScaleY = 1.0;
             titleTransition.Reset(""); ApplyTitleFrame();
             badgeShape.StopAmbientSpin();
             badgeSequence.Reset();
@@ -873,8 +989,8 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
 
         internal void RenderSample(string path)
         {
-            RenderSample(path, new FeedbackView { Kind = FeedbackViewKind.Confirmed, Title = "去粘贴吧",
-                Preview = "这次真的复制好了，可以放心粘贴。", Count = 12 }, true);
+            RenderSample(path, new FeedbackView { Kind = FeedbackViewKind.Confirmed, Title = localizer.Get("feedback.title.go_paste"),
+                Preview = localizer.Get("toast.sample.preview"), Count = 12 }, true);
         }
 
         internal void RenderSample(string path, FeedbackView sample, bool preview)
@@ -883,7 +999,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
         internal void RenderSample(string path, FeedbackView sample, bool preview, int dpi)
         {
             // Export a detached copy, never change DPI on the live HWND visual tree.
-            ToastWindow exporter = new ToastWindow();
+            ToastWindow exporter = new ToastWindow(Themes.MaterialEnabled, localizer);
             try
             {
                 double scale = dpi / 96.0;
@@ -930,8 +1046,8 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
         {
             double scale = dpi / 96.0;
             VisualTreeHelper.SetRootDpi(surface, new DpiScale(scale, scale));
-            SetContent(new FeedbackView { Kind = FeedbackViewKind.Confirmed, Title = FeedbackEngine.SuccessTitle(count),
-                Preview = "保持固定的预览文字", Count = count, CountText = new CappedCount(count).Format() }, true);
+            SetContent(new FeedbackView { Kind = FeedbackViewKind.Confirmed, Title = FeedbackMapper.ResolveTitle(FeedbackEngine.SuccessTitleKey(count), localizer),
+                Preview = "Fixed preview text", Count = count, CountText = new CappedCount(count).Format() }, true);
             counterExpand.Snap(count >= 2 ? 1 : 0);
             ApplyCardWidthFrame();
             UpdateTitle(Current.Title, false);
@@ -947,7 +1063,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
         }
         internal bool VerifyCheckMark(FeedbackViewKind kind)
         {
-            SetContent(new FeedbackView { Kind = kind, Title = "已复制", Preview = "test", Count = 6 }, true);
+            SetContent(new FeedbackView { Kind = kind, Title = localizer.Get("feedback.title.copied"), Preview = "test", Count = 6 }, true);
             bool success = kind != FeedbackViewKind.Unconfirmed && kind != FeedbackViewKind.Updated && kind != FeedbackViewKind.Retained;
             return checkMark.Data.IsFrozen && checkMark.Width == 18 && checkMark.Height == 18 &&
                 checkMark.StrokeThickness == 2 && checkMark.StrokeStartLineCap == PenLineCap.Round &&

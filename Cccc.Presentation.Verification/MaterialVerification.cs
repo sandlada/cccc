@@ -49,7 +49,7 @@ namespace Cccc.Presentation.Verification
         private static T Field<T>(object owner, string name)
         { return (T)owner.GetType().GetField(name, Private).GetValue(owner); }
         private static FeedbackView Sample(int count)
-        { return new FeedbackView { Kind = FeedbackViewKind.Confirmed, Count = count, Title = FeedbackEngine.SuccessTitle(count), Preview = "Material check g/y", Foreground = new WindowTarget() }; }
+        { return new FeedbackView { Kind = FeedbackViewKind.Confirmed, Count = count, Title = FeedbackMapper.ResolveTitle(FeedbackEngine.SuccessTitleKey(count), null), Preview = "Material check g/y", Foreground = new WindowTarget() }; }
 
         private static void Require(bool value, string message)
         { if (!value) throw new InvalidOperationException(message); }

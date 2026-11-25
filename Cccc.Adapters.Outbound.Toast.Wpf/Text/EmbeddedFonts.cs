@@ -14,12 +14,12 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
         internal static readonly FontWeight BodyWeight = FontWeight.FromOpenTypeWeight(500);
         internal static readonly FontFamily Family = new FontFamily(ToastAppearancePolicy.DefaultFontFamily);
 
-        internal static FontFamily ResolveFontFamily(string fontFamilyName)
+        internal static FontFamily ResolveFontFamily(string fontFamilyName, string languageDefaultFontFamily = null)
         {
-            string normalized = ToastAppearancePolicy.NormalizeFontFamily(fontFamilyName);
+            string effective = ToastAppearancePolicy.ResolveEffectiveFontFamily(fontFamilyName, languageDefaultFontFamily);
             try
             {
-                return new FontFamily(normalized);
+                return new FontFamily(effective);
             }
             catch (ArgumentException)
             {

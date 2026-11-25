@@ -25,13 +25,14 @@ namespace Cccc.Domain.Tests
                 Sequence = new ClipboardSequence(2),
                 OwnerProcess = 9,
                 Supported = true,
-                Preview = "text",
-                TypeLabel = "text"
+                ContentKind = ClipboardPayloadKind.Text,
+                TextPreview = "text"
             }, 10, 10, new WindowIdentity(1, 9));
 
             Assert.NotNull(result);
             Assert.Equal(1, result.Count);
             Assert.Equal(FeedbackKind.Confirmed, result.Kind);
+            Assert.Equal(FeedbackTitleKey.Copied, result.TitleKey);
         }
 
         [Fact]
@@ -117,15 +118,15 @@ namespace Cccc.Domain.Tests
         }
 
         [Theory]
-        [InlineData(1, "已复制")]
-        [InlineData(2, "还在呢")]
-        [InlineData(3, "真的复制好了")]
-        [InlineData(4, "千真万确复制好了")]
-        [InlineData(5, "去粘贴吧")]
-        [InlineData(9, "去粘贴吧")]
-        public void Success_titles_are_stable(int count, string expected)
+        [InlineData(1, FeedbackTitleKey.Copied)]
+        [InlineData(2, FeedbackTitleKey.StillThere)]
+        [InlineData(3, FeedbackTitleKey.ReallyCopied)]
+        [InlineData(4, FeedbackTitleKey.DefinitelyCopied)]
+        [InlineData(5, FeedbackTitleKey.GoPaste)]
+        [InlineData(9, FeedbackTitleKey.GoPaste)]
+        public void Success_title_keys_are_stable(int count, FeedbackTitleKey expected)
         {
-            Assert.Equal(expected, FeedbackEngine.SuccessTitle(count));
+            Assert.Equal(expected, FeedbackEngine.SuccessTitleKey(count));
         }
 
         [Fact]

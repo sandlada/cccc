@@ -27,8 +27,7 @@ namespace Cccc.Adapters.Outbound.Windows
                 {
                     Sequence = before,
                     OwnerProcess = access.OwnerProcess,
-                    Preview = "暂不支持预览",
-                    TypeLabel = "其他格式"
+                    ContentKind = ClipboardContentKind.Unsupported
                 };
                 if (access.Available(WindowsNativeMethods.ClipboardFormatFileDrop))
                 {
@@ -40,8 +39,9 @@ namespace Cccc.Adapters.Outbound.Windows
                     if (WindowsNativeMethods.DragQueryFile(handle, 0, name, (uint)name.Capacity) == 0) return null;
                     string file = Path.GetFileName(name.ToString().TrimEnd('\\'));
                     if (string.IsNullOrEmpty(file)) file = name.ToString();
-                    result.Preview = PreviewText.Shorten(file) + (count > 1 ? $" · 共 {count} 项" : "");
-                    result.TypeLabel = count > 1 ? $"文件 · {count} 项" : "文件";
+                    result.ContentKind = ClipboardContentKind.Files;
+                    result.FileName = file;
+                    result.FileCount = (int)Math.Min(count, int.MaxValue);
                     result.Supported = true;
                 }
                 else if (access.Available(WindowsNativeMethods.ClipboardFormatUnicodeText) || access.Available(WindowsNativeMethods.ClipboardFormatText))
@@ -61,10 +61,10 @@ namespace Cccc.Adapters.Outbound.Windows
                             Marshal.ReadByte(pointer, length) != 0)) length++;
                         string text = unicode ? Marshal.PtrToStringUni(pointer, length) :
                             Marshal.PtrToStringAnsi(pointer, length);
-                        result.Preview = PreviewText.Shorten(text);
+                        result.TextPreview = PreviewText.Shorten(text);
                     }
                     finally { WindowsNativeMethods.GlobalUnlock(handle); }
-                    result.TypeLabel = "文字";
+                    result.ContentKind = ClipboardContentKind.Text;
                     result.Supported = true;
                 }
                 else if (access.Available(WindowsNativeMethods.ClipboardFormatDeviceIndependentBitmapVersion5) || access.Available(WindowsNativeMethods.ClipboardFormatDeviceIndependentBitmap) ||
@@ -73,7 +73,7 @@ namespace Cccc.Adapters.Outbound.Windows
                     uint format = access.Available(WindowsNativeMethods.ClipboardFormatDeviceIndependentBitmapVersion5) ? WindowsNativeMethods.ClipboardFormatDeviceIndependentBitmapVersion5 :
                         access.Available(WindowsNativeMethods.ClipboardFormatDeviceIndependentBitmap) ? WindowsNativeMethods.ClipboardFormatDeviceIndependentBitmap : WindowsNativeMethods.ClipboardFormatBitmap;
                     if (access.Data(format) == IntPtr.Zero) return null;
-                    result.Preview = result.TypeLabel = "图片";
+                    result.ContentKind = ClipboardContentKind.Image;
                     result.Supported = true;
                 }
                 else if (access.FormatCount <= 0) return null;

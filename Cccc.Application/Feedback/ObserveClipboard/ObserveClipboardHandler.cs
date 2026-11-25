@@ -11,16 +11,18 @@ namespace Cccc.Application
         private readonly IClipboardReader clipboard;
         private readonly IForegroundWindowQuery foreground;
         private readonly IFeedbackPresenter presenter;
+        private readonly ILocalizer localizer;
 
         public ObserveClipboardHandler(FeedbackSession session, ISystemClock clock,
             IClipboardReader clipboard, IForegroundWindowQuery foreground,
-            IFeedbackPresenter presenter)
+            IFeedbackPresenter presenter, ILocalizer localizer = null)
         {
             this.session = session;
             this.clock = clock;
             this.clipboard = clipboard;
             this.foreground = foreground;
             this.presenter = presenter;
+            this.localizer = localizer;
         }
 
         public async Task<FeedbackView> HandleAsync(long eventTime, CancellationToken cancellationToken)
@@ -36,7 +38,7 @@ namespace Cccc.Application
             Feedback feedback = session.Observe(content, eventTime, clock.CurrentTimeMilliseconds, foreground.Current);
             if (feedback is null) return null;
 
-            FeedbackView view = FeedbackMapper.ToView(feedback);
+            FeedbackView view = FeedbackMapper.ToView(feedback, localizer);
             presenter.Present(view);
             return view;
         }

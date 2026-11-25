@@ -1,4 +1,3 @@
-using System;
 using System.Globalization;
 using System.Text;
 
@@ -7,9 +6,10 @@ namespace Cccc.Application
     public static class PreviewText
     {
         // Text elements keep emoji and combining marks intact at the 36-character cut.
+        // Blank/empty input returns an empty string so callers can localize the blank-text label.
         public static string Shorten(string text)
         {
-            if (string.IsNullOrEmpty(text)) return "空白文字";
+            if (string.IsNullOrEmpty(text)) return "";
             StringBuilder collapsed = new();
             bool space = false;
             foreach (char c in text)
@@ -21,7 +21,7 @@ namespace Cccc.Application
                 collapsed.Append(c);
                 space = false;
             }
-            if (collapsed.Length == 0) return "空白文字";
+            if (collapsed.Length == 0) return "";
             string normalized = collapsed.ToString();
             TextElementEnumerator elements = StringInfo.GetTextElementEnumerator(normalized);
             int count = 0;

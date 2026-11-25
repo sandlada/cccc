@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Reflection;
 using System.Windows.Forms;
@@ -15,8 +16,9 @@ namespace Cccc.Adapters.Inbound.Desktop
         private readonly ChangeStartupHandler changeStartup;
         private readonly SetPausedHandler setPaused;
         private readonly ShowStatusHandler status;
+        private readonly ILocalizer localizer;
         private readonly Func<bool> isDark;
-        private readonly Func<string> taskbarStatus;
+        private readonly Func<TaskbarPlacementDecision> taskbarStatus;
         private readonly Action<PreferencesModel> applyPreferences;
         private readonly Action<bool> switchLayout;
         private readonly Func<UninstallResult> uninstall;
@@ -26,13 +28,16 @@ namespace Cccc.Adapters.Inbound.Desktop
         private readonly Icon trayIcon;
         private readonly bool ownsIcon;
         private readonly ContextMenuStrip menu;
-        private readonly ToolStripMenuItem pauseItem, previewItem, materialItem, startupItem;
-        private readonly ToolStripMenuItem cardStyleItem, taskbarStyleItem, positionStatusItem;
+        private readonly ToolStripMenuItem headingItem, pauseItem, previewItem, materialItem, startupItem;
+        private readonly ToolStripMenuItem personalizationItem, styleMenu, cardStyleItem, taskbarStyleItem, positionStatusItem;
+        private readonly ToolStripMenuItem languageMenu, systemLanguageItem, uninstallItem, exitItem;
+        private readonly List<(string Tag, ToolStripMenuItem Item)> languageItems = new();
 
         public TrayMenu(FeedbackSession session, PreferencesService preferences,
             StartupRegistration startup, ChangePreferencesHandler changePreferences,
             ChangeStartupHandler changeStartup, SetPausedHandler setPaused,
-            ShowStatusHandler status, Func<bool> isDark, Func<string> taskbarStatus,
+            ShowStatusHandler status, ILocalizer localizer, Func<bool> isDark,
+            Func<TaskbarPlacementDecision> taskbarStatus,
             Action<PreferencesModel> applyPreferences, Action<bool> switchLayout,
             Func<UninstallResult> uninstall, Action exit, string productLabel)
         {
@@ -43,6 +48,7 @@ namespace Cccc.Adapters.Inbound.Desktop
             this.changeStartup = changeStartup;
             this.setPaused = setPaused;
             this.status = status;
+            this.localizer = localizer ?? new LocalizationService();
             this.isDark = isDark;
             this.taskbarStatus = taskbarStatus;
             this.applyPreferences = applyPreferences;
@@ -55,20 +61,17 @@ namespace Cccc.Adapters.Inbound.Desktop
             trayIcon = string.IsNullOrEmpty(entry) ? null : Icon.ExtractAssociatedIcon(entry);
             ownsIcon = trayIcon != null;
             if (trayIcon == null) trayIcon = SystemIcons.Application;
-            tray = new NotifyIcon { Icon = trayIcon, Text = "Cccc · 复制确认", Visible = true };
+            tray = new NotifyIcon { Icon = trayIcon, Text = SafeTooltip(this.localizer.Get("tray.tooltip.active")), Visible = true };
 
             menu = new ContextMenuStrip();
-            ToolStripMenuItem heading = new ToolStripMenuItem("Cccc 复制确认 · " + productLabel)
-            {
-                Enabled = false
-            };
-            pauseItem = new ToolStripMenuItem("暂停提示") { Checked = session.Paused };
+            headingItem = new ToolStripMenuItem { Enabled = false };
+            pauseItem = new ToolStripMenuItem { Checked = session.Paused };
             pauseItem.Click += delegate
             {
                 SetPausedResult result = setPaused.Handle(!session.Paused);
                 SetPausedState(result.Paused);
             };
-            previewItem = new ToolStripMenuItem("显示内容预览") { Checked = preferences.Current.ShowPreview };
+            previewItem = new ToolStripMenuItem { Checked = preferences.Current.ShowPreview };
             previewItem.Click += delegate
             {
                 var result = changePreferences.Handle(new ChangePreferencesCommand
@@ -77,11 +80,13 @@ namespace Cccc.Adapters.Inbound.Desktop
                 });
                 applyPreferences(result.Preferences);
                 RefreshPreferences(result.Preferences);
-                if (!result.Success) ShowWarning("设置未能保存", "本次选择仍然生效，重启后可能恢复原设置。");
-                status.Handle(preferences.Current.ShowPreview ? "内容预览已开启" : "内容预览已隐藏",
-                    preferences.Current.ShowPreview ? "复制后显示一小段内容" : "复制后仅显示内容类型和次数");
+                if (!result.Success)
+                    ShowWarning(this.localizer.Get("warning.save_failed.title"), this.localizer.Get("warning.save_failed.detail"));
+                status.Handle(
+                    this.localizer.Get(preferences.Current.ShowPreview ? "status.preview_on.title" : "status.preview_off.title"),
+                    this.localizer.Get(preferences.Current.ShowPreview ? "status.preview_on.detail" : "status.preview_off.detail"));
             };
-            materialItem = new ToolStripMenuItem("高级材质") { Checked = preferences.Current.UseMaterial };
+            materialItem = new ToolStripMenuItem { Checked = preferences.Current.UseMaterial };
             materialItem.Click += delegate
             {
                 var result = changePreferences.Handle(new ChangePreferencesCommand
@@ -90,15 +95,17 @@ namespace Cccc.Adapters.Inbound.Desktop
                 });
                 applyPreferences(result.Preferences);
                 RefreshPreferences(result.Preferences);
-                if (!result.Success) ShowWarning("设置未能保存", "本次选择仍然生效，重启后可能恢复原设置。");
-                status.Handle(preferences.Current.UseMaterial ? "高级材质已开启" : "高级材质已关闭",
-                    preferences.Current.UseMaterial
+                if (!result.Success)
+                    ShowWarning(this.localizer.Get("warning.save_failed.title"), this.localizer.Get("warning.save_failed.detail"));
+                status.Handle(
+                    this.localizer.Get(preferences.Current.UseMaterial ? "status.material_on.title" : "status.material_off.title"),
+                    this.localizer.Get(preferences.Current.UseMaterial
                         ? (preferences.Current.Layout == LayoutMode.Taskbar
-                            ? "借用任务栏背景，不叠加额外模糊"
-                            : "系统允许时显示 Acrylic 材质")
-                        : "使用纯色背景，保留文字与动画");
+                            ? "status.material_on.detail_taskbar"
+                            : "status.material_on.detail_card")
+                        : "status.material_off.detail"));
             };
-            startupItem = new ToolStripMenuItem("开机自启动");
+            startupItem = new ToolStripMenuItem();
             startupItem.Click += delegate
             {
                 StartupState current = ReadStartupState();
@@ -106,40 +113,58 @@ namespace Cccc.Adapters.Inbound.Desktop
                 if (!result.Success)
                 {
                     RefreshStartup();
-                    ShowWarning("未能更改开机自启动", "设置未能保存，请稍后重试");
+                    ShowWarning(this.localizer.Get("warning.startup_failed.title"), this.localizer.Get("warning.startup_failed.detail"));
                     return;
                 }
                 SetStartupState(result.State);
-                status.Handle(result.State.Enabled ? "开机自启动已开启" : "开机自启动已关闭",
-                    result.State.Enabled ? "下次登录 Windows 时启动 Cccc" : "需要时双击程序启动");
+                status.Handle(
+                    this.localizer.Get(result.State.Enabled ? "status.startup_on.title" : "status.startup_off.title"),
+                    this.localizer.Get(result.State.Enabled ? "status.startup_on.detail" : "status.startup_off.detail"));
             };
-            ToolStripMenuItem uninstallItem = new ToolStripMenuItem("卸载 Cccc…");
+            personalizationItem = new ToolStripMenuItem();
+            personalizationItem.Click += delegate
+            {
+                PersonalizationDialog.ShowDialogOrActivate(
+                    preferences, changePreferences, status, this.localizer, isDark, applyPreferences, RefreshPreferences);
+            };
+            styleMenu = new ToolStripMenuItem();
+            cardStyleItem = new ToolStripMenuItem();
+            taskbarStyleItem = new ToolStripMenuItem();
+            cardStyleItem.Click += delegate { SwitchLayout(false); };
+            taskbarStyleItem.Click += delegate { SwitchLayout(true); };
+            styleMenu.DropDownItems.Add(cardStyleItem);
+            styleMenu.DropDownItems.Add(taskbarStyleItem);
+
+            // Language submenu dynamically built from auto-discovered catalogs
+            languageMenu = new ToolStripMenuItem();
+            systemLanguageItem = new ToolStripMenuItem();
+            systemLanguageItem.Click += delegate { SwitchLanguage(LanguageSettings.SystemTag); };
+            languageMenu.DropDownItems.Add(systemLanguageItem);
+            languageMenu.DropDownItems.Add(new ToolStripSeparator());
+            foreach (LanguageOption option in this.localizer.AvailableLanguages)
+            {
+                string tag = option.Tag;
+                ToolStripMenuItem item = new ToolStripMenuItem(option.NativeName);
+                item.Click += delegate { SwitchLanguage(tag); };
+                languageItems.Add((tag, item));
+                languageMenu.DropDownItems.Add(item);
+            }
+
+            positionStatusItem = new ToolStripMenuItem { Enabled = false };
+            uninstallItem = new ToolStripMenuItem();
             uninstallItem.Click += delegate { Uninstall(); };
-            ToolStripMenuItem exitItem = new ToolStripMenuItem("退出 Cccc");
+            exitItem = new ToolStripMenuItem();
             exitItem.Click += delegate { exit(); };
 
-            menu.Items.Add(heading);
+            menu.Items.Add(headingItem);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(pauseItem);
             menu.Items.Add(previewItem);
             menu.Items.Add(startupItem);
             menu.Items.Add(materialItem);
-            ToolStripMenuItem personalizationItem = new ToolStripMenuItem("个性化设置…");
-            personalizationItem.Click += delegate
-            {
-                PersonalizationDialog.ShowDialogOrActivate(
-                    preferences, changePreferences, status, isDark, applyPreferences, RefreshPreferences);
-            };
-            ToolStripMenuItem styleMenu = new ToolStripMenuItem("提示样式");
-            cardStyleItem = new ToolStripMenuItem("普通卡片");
-            taskbarStyleItem = new ToolStripMenuItem("任务栏单行（实验性）");
-            cardStyleItem.Click += delegate { SwitchLayout(false); };
-            taskbarStyleItem.Click += delegate { SwitchLayout(true); };
-            styleMenu.DropDownItems.Add(cardStyleItem);
-            styleMenu.DropDownItems.Add(taskbarStyleItem);
-            positionStatusItem = new ToolStripMenuItem { Enabled = false };
             menu.Items.Add(personalizationItem);
             menu.Items.Add(styleMenu);
+            menu.Items.Add(languageMenu);
             menu.Items.Add(positionStatusItem);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(uninstallItem);
@@ -152,17 +177,30 @@ namespace Cccc.Adapters.Inbound.Desktop
             tray.ContextMenuStrip = menu;
             tray.DoubleClick += delegate
             {
-                status.Handle(session.Paused ? "Cccc 已暂停" : "Cccc 正在运行",
-                    session.Paused ? "取消勾选托盘菜单的“暂停提示”即可恢复" : "复制时自动提示 · 右键托盘图标可设置");
+                status.Handle(
+                    this.localizer.Get(session.Paused ? "status.paused.title" : "status.running.title"),
+                    this.localizer.Get(session.Paused ? "status.paused.tray_detail" : "status.running.detail"));
             };
+
+            this.localizer.LanguageChanged += OnLanguageChanged;
             RefreshAll();
             UpdateTheme();
         }
 
         public void RefreshAll()
         {
+            headingItem.Text = localizer.Format("tray.heading", productLabel);
+            pauseItem.Text = localizer.Get("tray.pause");
             pauseItem.Checked = session.Paused;
-            tray.Text = session.Paused ? "Cccc · 已暂停" : "Cccc · 复制确认";
+            personalizationItem.Text = localizer.Get("tray.personalization");
+            styleMenu.Text = localizer.Get("tray.style");
+            cardStyleItem.Text = localizer.Get("tray.style.card");
+            taskbarStyleItem.Text = localizer.Get("tray.style.taskbar");
+            languageMenu.Text = localizer.Get("tray.language");
+            systemLanguageItem.Text = localizer.Get("tray.language.system");
+            uninstallItem.Text = localizer.Get("tray.uninstall");
+            exitItem.Text = localizer.Get("tray.exit");
+            tray.Text = SafeTooltip(localizer.Get(session.Paused ? "tray.tooltip.paused" : "tray.tooltip.active"));
             RefreshPreferences(preferences.Current);
             RefreshStartup();
         }
@@ -172,28 +210,35 @@ namespace Cccc.Adapters.Inbound.Desktop
             bool compact = model.Layout == LayoutMode.Taskbar;
             previewItem.Enabled = !compact;
             previewItem.Checked = !compact && model.ShowPreview;
-            previewItem.Text = compact ? "内容预览（单行样式不显示）" : "显示内容预览";
+            previewItem.Text = localizer.Get(compact ? "tray.preview_compact" : "tray.preview");
             materialItem.Checked = model.UseMaterial;
-            materialItem.Text = "高级材质";
+            materialItem.Text = localizer.Get("tray.material");
             cardStyleItem.Checked = !compact;
             taskbarStyleItem.Checked = compact;
             positionStatusItem.Visible = compact;
-            positionStatusItem.Text = "定位：" + taskbarStatus();
+            string placementText = FeedbackMapper.ResolveTaskbarPlacement(taskbarStatus(), localizer);
+            positionStatusItem.Text = localizer.Format("tray.position_status", placementText);
+
+            string preferredLanguage = LanguageSettings.NormalizePreference(model.Language);
+            systemLanguageItem.Checked = LanguageSettings.IsSystem(preferredLanguage);
+            foreach (var entry in languageItems)
+                entry.Item.Checked = !systemLanguageItem.Checked &&
+                    string.Equals(entry.Tag, preferredLanguage, StringComparison.OrdinalIgnoreCase);
         }
 
         public void SetPausedState(bool paused)
         {
             pauseItem.Checked = paused;
-            tray.Text = paused ? "Cccc · 已暂停" : "Cccc · 复制确认";
+            tray.Text = SafeTooltip(localizer.Get(paused ? "tray.tooltip.paused" : "tray.tooltip.active"));
         }
 
         public void SetStartupState(StartupState state)
         {
             startupItem.Enabled = true;
             startupItem.Checked = state != null && state.Enabled;
-            startupItem.Text = state != null && state.Enabled && !state.CurrentLocation
-                ? "开机自启动（其他位置）"
-                : "开机自启动";
+            startupItem.Text = localizer.Get(state != null && state.Enabled && !state.CurrentLocation
+                ? "tray.startup_other"
+                : "tray.startup");
         }
 
         public void UpdateTheme()
@@ -206,6 +251,30 @@ namespace Cccc.Adapters.Inbound.Desktop
             tray.ShowBalloonTip(5000, title, detail, ToolTipIcon.Warning);
         }
 
+        private void OnLanguageChanged(LanguageOption _)
+        {
+            if (menu.InvokeRequired)
+                menu.BeginInvoke(new Action(RefreshAll));
+            else
+                RefreshAll();
+        }
+
+        private void SwitchLanguage(string languageTag)
+        {
+            string normalized = LanguageSettings.NormalizePreference(languageTag);
+            var result = changePreferences.Handle(new ChangePreferencesCommand { Language = normalized });
+            localizer.ApplyPreference(result.Preferences.Language);
+            applyPreferences(result.Preferences);
+            RefreshAll();
+            if (!result.Success)
+                ShowWarning(localizer.Get("warning.save_failed.title"), localizer.Get("warning.save_failed.detail"));
+
+            string detail = LanguageSettings.IsSystem(normalized)
+                ? localizer.Format("status.language_changed.detail_system", localizer.CurrentLanguage.NativeName)
+                : localizer.Format("status.language_changed.detail_manual", localizer.CurrentLanguage.NativeName);
+            status.Handle(localizer.Get("status.language_changed.title"), detail);
+        }
+
         private void RefreshStartup()
         {
             StartupState state = ReadStartupState();
@@ -213,7 +282,7 @@ namespace Cccc.Adapters.Inbound.Desktop
             {
                 startupItem.Checked = false;
                 startupItem.Enabled = false;
-                startupItem.Text = "开机自启动（读取失败）";
+                startupItem.Text = localizer.Get("tray.startup_failed");
                 return;
             }
             SetStartupState(state);
@@ -228,47 +297,55 @@ namespace Cccc.Adapters.Inbound.Desktop
         private void SwitchLayout(bool compact)
         {
             if ((preferences.Current.Layout == LayoutMode.Taskbar) == compact) return;
-            if (compact && !TaskbarLayoutDialog.Confirm(isDark())) return;
+            if (compact && !TaskbarLayoutDialog.Confirm(isDark(), localizer)) return;
             var result = changePreferences.Handle(new ChangePreferencesCommand
             {
                 Layout = compact ? LayoutMode.Taskbar : LayoutMode.Card
             });
-            if (!result.Success) ShowWarning("设置未能保存", "本次选择仍然生效，重启后可能恢复原设置。");
+            if (!result.Success)
+                ShowWarning(localizer.Get("warning.save_failed.title"), localizer.Get("warning.save_failed.detail"));
             applyPreferences(result.Preferences);
             switchLayout(compact);
             RefreshPreferences(result.Preferences);
-            status.Handle(compact ? "已切换任务栏单行" : "已切换普通卡片",
-                "复制反馈与动画保持不变");
+            status.Handle(
+                localizer.Get(compact ? "status.layout_taskbar.title" : "status.layout_card.title"),
+                localizer.Get("status.layout.detail"));
         }
 
         private void Uninstall()
         {
             DialogResult confirm = MessageBox.Show(
-                "将移除开机自启动，并删除 %LocalAppData%\\Sandlada.Cccc 设置文件夹。\n" +
-                "不会删除程序文件夹，需要时请自行删除。\n\n确定要卸载 Cccc 吗？",
-                "卸载 Cccc", MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
+                localizer.Get("dialog.uninstall.confirm"),
+                localizer.Get("dialog.uninstall.title"),
+                MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
                 MessageBoxDefaultButton.Button2);
             if (confirm != DialogResult.Yes) return;
 
             UninstallResult result = uninstall();
             if (!result.Success)
             {
-                var remaining = new System.Collections.Generic.List<string>();
-                if (!result.StartupCleared) remaining.Add("开机自启动项");
-                if (!result.SettingsDeleted) remaining.Add("当前设置文件");
-                if (!result.LegacySettingsDeleted) remaining.Add("旧版设置文件");
-                if (!result.DirectoryDeleted) remaining.Add("设置文件夹");
+                var remaining = new List<string>();
+                if (!result.StartupCleared) remaining.Add(localizer.Get("dialog.uninstall.item.startup"));
+                if (!result.SettingsDeleted) remaining.Add(localizer.Get("dialog.uninstall.item.settings"));
+                if (!result.LegacySettingsDeleted) remaining.Add(localizer.Get("dialog.uninstall.item.legacy_settings"));
+                if (!result.DirectoryDeleted) remaining.Add(localizer.Get("dialog.uninstall.item.directory"));
                 MessageBox.Show(
-                    "以下内容未能自动移除：\n" + string.Join("\n", remaining) +
-                    "\n\n请手动检查 HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run " +
-                    "或 %LocalAppData%\\Sandlada.Cccc。",
-                    "卸载 Cccc", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    localizer.Format("dialog.uninstall.partial_header", string.Join("\n", remaining)),
+                    localizer.Get("dialog.uninstall.title"),
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             exit();
         }
 
+        private static string SafeTooltip(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return "Cccc";
+            return text.Length <= 63 ? text : text.Substring(0, 63);
+        }
+
         public void Dispose()
         {
+            localizer.LanguageChanged -= OnLanguageChanged;
             tray.Visible = false;
             if (menu != null) menu.Dispose();
             tray.Dispose();

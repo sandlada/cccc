@@ -39,8 +39,10 @@ namespace Cccc.Presentation.Verification
         private readonly DispatcherTimer diagnosticsTimer;
 
         private ComboBox kindBox;
+        private ComboBox languageBox;
         private ComboBox layoutBox;
         private ComboBox displayModeBox;
+        private ComboBox positionBox;
         private ComboBox themeBox;
         private ComboBox intervalBox;
         private TextBox titleBox;
@@ -57,20 +59,27 @@ namespace Cccc.Presentation.Verification
         private CheckBox fullCounterCornerRadiusCheck;
         private CheckBox showBorderCheck;
         private CheckBox showShadowCheck;
+        private CheckBox taskbarAdaptCheck;
+        private CheckBox screenPositionCheck;
         private CheckBox autoSaveCheck;
         private Slider countSlider;
         private Slider cornerRadiusSlider;
         private Slider counterCornerRadiusSlider;
         private Slider paddingSlider;
+        private Slider offsetXSlider;
+        private Slider offsetYSlider;
         private TextBlock countLabel;
         private TextBlock cornerRadiusLabel;
         private TextBlock counterCornerRadiusLabel;
         private TextBlock paddingLabel;
+        private TextBlock offsetXLabel;
+        private TextBlock offsetYLabel;
         private TextBlock stateLabel;
         private TextBlock statusLabel;
         private TextBlock outlineLabel;
         private Border previewOutline;
 
+        private readonly LocalizationService localizer;
         private readonly FilePreferencesStore preferencesStore;
         private PreferencesModel currentPreferences;
         private ToastWindow toast;
@@ -107,6 +116,9 @@ namespace Cccc.Presentation.Verification
             currentPreferences = loaded.State == PreferencesLoadState.Loaded && loaded.Model != null
                 ? loaded.Model
                 : new PreferencesModel();
+            localizer = new LocalizationService(new WindowsSystemLanguageProvider());
+            localizer.ApplyPreference(currentPreferences.Language);
+            Title = localizer.Get("preview.title");
 
             PositionWindow();
             Content = CreateLayout();
@@ -203,7 +215,19 @@ namespace Cccc.Presentation.Verification
             {
                 if (updatingControls) return;
                 ApplyThemeSelection();
-                statusLabel.Text = "已切換主題。";
+                statusLabel.Text = localizer.Get("preview.status.theme_switched");
+            };
+            languageBox.SelectionChanged += delegate
+            {
+                if (updatingControls) return;
+                string tag = SelectedTag(languageBox, LanguageSettings.SystemTag);
+                localizer.ApplyPreference(tag);
+                if (toast != null) toast.ApplyLanguage();
+                if (autoTitleCheck.IsChecked == true) UpdateAutoTitle();
+                previewBox.Text = localizer.Get("preview.default_text");
+                typeBox.Text = localizer.Get("clipboard.type.text");
+                ApplyPersonalizationLive();
+                statusLabel.Text = localizer.Format("preview.status.language_switched", localizer.CurrentLanguage.NativeName);
             };
             intervalBox.SelectionChanged += delegate
             {
@@ -291,6 +315,13 @@ namespace Cccc.Presentation.Verification
             showBorderCheck.Unchecked += delegate { ApplyPersonalizationLive(); };
             showShadowCheck.Checked += delegate { ApplyPersonalizationLive(); };
             showShadowCheck.Unchecked += delegate { ApplyPersonalizationLive(); };
+            positionBox.SelectionChanged += delegate { ApplyPersonalizationLive(); };
+            offsetXSlider.ValueChanged += delegate { ApplyPersonalizationLive(); };
+            offsetYSlider.ValueChanged += delegate { ApplyPersonalizationLive(); };
+            taskbarAdaptCheck.Checked += delegate { ApplyPersonalizationLive(); };
+            taskbarAdaptCheck.Unchecked += delegate { ApplyPersonalizationLive(); };
+            screenPositionCheck.Checked += delegate { UpdateToastPositionMode(); };
+            screenPositionCheck.Unchecked += delegate { UpdateToastPositionMode(); };
             fontFamilyBox.KeyDown += (_, e) =>
             {
                 if (e.Key == System.Windows.Input.Key.Enter)
@@ -377,10 +408,16 @@ namespace Cccc.Presentation.Verification
             displayModeBox.SelectedIndex = 0;
 
             themeBox = new ComboBox { MinHeight = 28 };
-            AddChoice(themeBox, "跟隨系統", PreviewThemeMode.System);
-            AddChoice(themeBox, "淺色", PreviewThemeMode.Light);
-            AddChoice(themeBox, "深色", PreviewThemeMode.Dark);
+            AddChoice(themeBox, localizer.Get("preview.theme.system"), PreviewThemeMode.System);
+            AddChoice(themeBox, localizer.Get("preview.theme.light"), PreviewThemeMode.Light);
+            AddChoice(themeBox, localizer.Get("preview.theme.dark"), PreviewThemeMode.Dark);
             themeBox.SelectedIndex = 0;
+
+            languageBox = new ComboBox { MinHeight = 28 };
+            AddChoice(languageBox, localizer.Get("tray.language.system"), LanguageSettings.SystemTag);
+            foreach (LanguageOption option in localizer.AvailableLanguages)
+                AddChoice(languageBox, option.NativeName, option.Tag);
+            languageBox.SelectedIndex = 0;
 
             intervalBox = new ComboBox { MinHeight = 28 };
             AddChoice(intervalBox, "100 ms", 100);
@@ -406,7 +443,53 @@ namespace Cccc.Presentation.Verification
             fullCounterCornerRadiusCheck = CreateCheckBox("計數器滿圓（高度 / 2）", false);
             showBorderCheck = CreateCheckBox("顯示邊框 (Border)", true);
             showShadowCheck = CreateCheckBox("顯示陰影 (Shadow)", true);
+            taskbarAdaptCheck = CreateCheckBox("避讓任務欄並跟隨顯示/隱藏", true);
+            screenPositionCheck = CreateCheckBox("使用螢幕實際位置預覽（測試 8 方位/偏移/任務欄）", false);
             autoSaveCheck = CreateCheckBox("即時同步至 Cccc 設定檔", true);
+            positionBox = new ComboBox { MinHeight = 28 };
+            AddChoice(positionBox, "左上角 (TopLeft)", WindowPosition.TopLeft);
+            AddChoice(positionBox, "頂部居中 (TopCenter)", WindowPosition.TopCenter);
+            AddChoice(positionBox, "右上角 (TopRight)", WindowPosition.TopRight);
+            AddChoice(positionBox, "左側居中 (MiddleLeft)", WindowPosition.MiddleLeft);
+            AddChoice(positionBox, "右側居中 (MiddleRight)", WindowPosition.MiddleRight);
+            AddChoice(positionBox, "左下角 (BottomLeft)", WindowPosition.BottomLeft);
+            AddChoice(positionBox, "底部居中 (BottomCenter)", WindowPosition.BottomCenter);
+            AddChoice(positionBox, "右下角 (BottomRight)", WindowPosition.BottomRight);
+            positionBox.SelectedIndex = 5;
+            offsetXSlider = new Slider
+            {
+                Minimum = PositionBounds.MinOffset,
+                Maximum = PositionBounds.MaxOffset,
+                Value = PositionBounds.DefaultOffset,
+                TickFrequency = 1,
+                IsSnapToTickEnabled = true,
+                Margin = new Thickness(0, 4, 0, 0)
+            };
+            offsetXLabel = new TextBlock
+            {
+                Text = "0 px",
+                Foreground = TextBrush,
+                FontWeight = FontWeights.SemiBold,
+                FontFamily = new FontFamily("Consolas"),
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            offsetYSlider = new Slider
+            {
+                Minimum = PositionBounds.MinOffset,
+                Maximum = PositionBounds.MaxOffset,
+                Value = PositionBounds.DefaultOffset,
+                TickFrequency = 1,
+                IsSnapToTickEnabled = true,
+                Margin = new Thickness(0, 4, 0, 0)
+            };
+            offsetYLabel = new TextBlock
+            {
+                Text = "0 px",
+                Foreground = TextBrush,
+                FontWeight = FontWeights.SemiBold,
+                FontFamily = new FontFamily("Consolas"),
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
             fontFamilyBox = CreateTextBox(false);
             fontFamilyBox.ToolTip = "輸入系統已安裝的字體名稱（支援逗號分隔多個回退字體），留空則恢復預設";
 
@@ -533,11 +616,13 @@ namespace Cccc.Presentation.Verification
             behaviour.Children.Add(showPreviewCheck);
 
             StackPanel appearance = new StackPanel();
-            appearance.Children.Add(Label("版面"));
+            appearance.Children.Add(Label(localizer.Get("preview.label.language")));
+            appearance.Children.Add(languageBox);
+            appearance.Children.Add(Label(localizer.Get("preview.label.layout")));
             appearance.Children.Add(layoutBox);
-            appearance.Children.Add(Label("顯示模式"));
+            appearance.Children.Add(Label(localizer.Get("preview.label.display_mode")));
             appearance.Children.Add(displayModeBox);
-            appearance.Children.Add(Label("主題"));
+            appearance.Children.Add(Label(localizer.Get("preview.label.theme")));
             appearance.Children.Add(themeBox);
 
             Grid radiusHeader = new Grid { Margin = new Thickness(0, 8, 0, 0) };
@@ -581,6 +666,35 @@ namespace Cccc.Presentation.Verification
             appearance.Children.Add(showBorderCheck);
             appearance.Children.Add(showShadowCheck);
             appearance.Children.Add(materialCheck);
+            appearance.Children.Add(Label("顯示位置 (8 方位)"));
+            appearance.Children.Add(positionBox);
+
+            Grid offsetXHeader = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+            offsetXHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            offsetXHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            TextBlock offsetXTitle = Label("水平偏移 (X)");
+            offsetXTitle.Margin = new Thickness(0);
+            offsetXTitle.VerticalAlignment = VerticalAlignment.Center;
+            offsetXHeader.Children.Add(offsetXTitle);
+            Grid.SetColumn(offsetXLabel, 1);
+            offsetXHeader.Children.Add(offsetXLabel);
+            appearance.Children.Add(offsetXHeader);
+            appearance.Children.Add(offsetXSlider);
+
+            Grid offsetYHeader = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+            offsetYHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            offsetYHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            TextBlock offsetYTitle = Label("垂直偏移 (Y)");
+            offsetYTitle.Margin = new Thickness(0);
+            offsetYTitle.VerticalAlignment = VerticalAlignment.Center;
+            offsetYHeader.Children.Add(offsetYTitle);
+            Grid.SetColumn(offsetYLabel, 1);
+            offsetYHeader.Children.Add(offsetYLabel);
+            appearance.Children.Add(offsetYHeader);
+            appearance.Children.Add(offsetYSlider);
+
+            appearance.Children.Add(taskbarAdaptCheck);
+            appearance.Children.Add(screenPositionCheck);
             appearance.Children.Add(autoSaveCheck);
 
             appearance.Children.Add(Label("字體 (Font Family)"));
@@ -755,12 +869,23 @@ namespace Cccc.Presentation.Verification
             LayoutMode layout = SelectedTag(layoutBox, LayoutMode.Card);
             ToastProfile.SetCompact(layout == LayoutMode.Taskbar);
             Themes.MaterialAvailable = false;
-            toast = new ToastWindow(materialCheck.IsChecked == true);
+            toast = new ToastWindow(materialCheck.IsChecked == true, localizer);
             toast.ApplyPersonalization(BuildPreferencesFromControls());
             toast.PreviewKeepVisible = keepVisibleCheck.IsChecked == true;
-            toast.PreviewPositionProvider = CalculateToastPosition;
+            toast.PreviewPositionProvider = screenPositionCheck.IsChecked == true ? null : CalculateToastPosition;
             UpdateMaterialAvailability();
             UpdateOutline();
+        }
+
+        private void UpdateToastPositionMode()
+        {
+            if (toast == null || isClosed) return;
+            toast.PreviewPositionProvider = screenPositionCheck.IsChecked == true ? null : CalculateToastPosition;
+            RepositionToast();
+            PresentCurrent(false);
+            statusLabel.Text = screenPositionCheck.IsChecked == true
+                ? "已切換為螢幕實際定位預覽。"
+                : "已切換為舞台旁固定預覽。";
         }
 
         private void SyncControlsFromPreferences(PreferencesModel model)
@@ -768,6 +893,7 @@ namespace Cccc.Presentation.Verification
             updatingControls = true;
             try
             {
+                SelectByTag(languageBox, LanguageSettings.NormalizePreference(model.Language));
                 SelectByTag(layoutBox, model.Layout);
                 SelectByTag(displayModeBox, model.DisplayMode);
                 showPreviewCheck.IsChecked = model.ShowPreview;
@@ -791,6 +917,12 @@ namespace Cccc.Presentation.Verification
                 showBorderCheck.IsChecked = model.ShowBorder;
                 showShadowCheck.IsChecked = model.ShowShadow;
                 fontFamilyBox.Text = model.FontFamily ?? AppearanceBounds.DefaultFontFamily;
+                SelectByTag(positionBox, model.Position);
+                offsetXSlider.Value = model.OffsetX;
+                offsetXLabel.Text = $"{model.OffsetX:+#;-#;0} px";
+                offsetYSlider.Value = model.OffsetY;
+                offsetYLabel.Text = $"{model.OffsetY:+#;-#;0} px";
+                taskbarAdaptCheck.IsChecked = model.AdaptToTaskbar;
             }
             finally { updatingControls = false; }
         }
@@ -822,7 +954,12 @@ namespace Cccc.Presentation.Verification
                 Padding = (int)Math.Round(paddingSlider.Value),
                 ShowBorder = showBorderCheck.IsChecked == true,
                 ShowShadow = showShadowCheck.IsChecked == true,
-                FontFamily = AppearanceBounds.NormalizeFontFamily(fontFamilyBox.Text)
+                FontFamily = AppearanceBounds.NormalizeFontFamily(fontFamilyBox.Text),
+                Position = SelectedTag(positionBox, WindowPosition.BottomLeft),
+                OffsetX = (int)Math.Round(offsetXSlider.Value),
+                OffsetY = (int)Math.Round(offsetYSlider.Value),
+                AdaptToTaskbar = taskbarAdaptCheck.IsChecked == true,
+                Language = SelectedTag(languageBox, LanguageSettings.SystemTag)
             };
         }
 
@@ -857,6 +994,8 @@ namespace Cccc.Presentation.Verification
                 ? $"滿圓 ({AppearanceBounds.MaxCounterCornerRadius} px)"
                 : currentPreferences.CounterCornerRadius + " px";
             paddingLabel.Text = currentPreferences.Padding + " px";
+            offsetXLabel.Text = $"{currentPreferences.OffsetX:+#;-#;0} px";
+            offsetYLabel.Text = $"{currentPreferences.OffsetY:+#;-#;0} px";
             if (toast != null)
             {
                 toast.ApplyPersonalization(currentPreferences);
@@ -928,16 +1067,16 @@ namespace Cccc.Presentation.Verification
             };
         }
 
-        private static string DefaultTitle(FeedbackViewKind kind, int count)
+        private string DefaultTitle(FeedbackViewKind kind, int count)
         {
             return kind switch
             {
-                FeedbackViewKind.Confirmed => FeedbackEngine.SuccessTitle(count),
-                FeedbackViewKind.Retained => "刚才的内容仍在剪贴板",
-                FeedbackViewKind.Unconfirmed => "未检测到新的复制结果",
-                FeedbackViewKind.Updated => "剪贴板已更新",
-                FeedbackViewKind.Status => "Cccc 預覽",
-                _ => "已复制"
+                FeedbackViewKind.Confirmed => FeedbackMapper.ResolveTitle(FeedbackEngine.SuccessTitleKey(count), localizer),
+                FeedbackViewKind.Retained => FeedbackMapper.ResolveTitle(FeedbackTitleKey.RetainedPrevious, localizer),
+                FeedbackViewKind.Unconfirmed => FeedbackMapper.ResolveTitle(FeedbackTitleKey.Unconfirmed, localizer),
+                FeedbackViewKind.Updated => FeedbackMapper.ResolveTitle(FeedbackTitleKey.ClipboardUpdated, localizer),
+                FeedbackViewKind.Status => localizer.Get("preview.status_title"),
+                _ => FeedbackMapper.ResolveTitle(FeedbackTitleKey.Copied, localizer)
             };
         }
 

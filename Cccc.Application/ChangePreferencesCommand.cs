@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Cccc.Application
+﻿namespace Cccc.Application
 {
     public sealed class ChangePreferencesCommand
     {
@@ -16,5 +14,10 @@ namespace Cccc.Application
         public bool? ShowBorder;
         public bool? ShowShadow;
         public string FontFamily;
+        public WindowPosition? Position;
+        public int? OffsetX;
+        public int? OffsetY;
+        public bool? AdaptToTaskbar;
+        public string Language;
     }
 }

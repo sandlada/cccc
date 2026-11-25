@@ -4,14 +4,16 @@ using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Markup;
 using System.Windows.Media;
+using Cccc.Application;
 using Cccc.Platform.Windows;
 
 namespace Cccc.Adapters.Inbound.Desktop
 {
     internal static class TaskbarLayoutDialog
     {
-        internal static bool Confirm(bool dark)
+        internal static bool Confirm(bool dark, ILocalizer localizer)
         {
+            ILocalizer l10n = localizer ?? new LocalizationService();
             bool highContrast = SystemParameters.HighContrast;
             Brush background = highContrast ? SystemColors.WindowBrush :
                 new SolidColorBrush(dark ? Color.FromRgb(43, 43, 43) : Colors.White);
@@ -20,7 +22,7 @@ namespace Cccc.Adapters.Inbound.Desktop
             Window dialog = new Window
             {
                 Title = "Cccc",
-                Width = 440,
+                Width = 460,
                 SizeToContent = SizeToContent.Height,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterScreen,
@@ -41,7 +43,7 @@ namespace Cccc.Adapters.Inbound.Desktop
             StackPanel content = new StackPanel { Margin = new Thickness(24) };
             content.Children.Add(new TextBlock
             {
-                Text = "试用任务栏单行",
+                Text = l10n.Get("dialog.taskbar.title"),
                 FontSize = 20,
                 FontWeight = FontWeights.SemiBold,
                 TextWrapping = TextWrapping.Wrap,
@@ -49,7 +51,7 @@ namespace Cccc.Adapters.Inbound.Desktop
             });
             content.Children.Add(new TextBlock
             {
-                Text = "这项功能仍在试验中。任务栏空间不足或自动隐藏时，提示可能遮住任务栏上的图标，也可能显示在任务栏上方。",
+                Text = l10n.Get("dialog.taskbar.body"),
                 Margin = new Thickness(0, 12, 0, 0),
                 TextWrapping = TextWrapping.Wrap,
                 LineHeight = 22,
@@ -58,8 +60,8 @@ namespace Cccc.Adapters.Inbound.Desktop
             Grid buttons = new Grid { Margin = new Thickness(24, 16, 24, 16) };
             buttons.ColumnDefinitions.Add(new ColumnDefinition());
             buttons.ColumnDefinitions.Add(new ColumnDefinition());
-            Button confirm = new Button { Content = "切换样式", MinHeight = 34, Margin = new Thickness(0, 0, 4, 0) };
-            Button cancel = new Button { Content = "取消", MinHeight = 34, Margin = new Thickness(4, 0, 0, 0), IsCancel = true };
+            Button confirm = new Button { Content = l10n.Get("dialog.taskbar.confirm"), MinHeight = 34, Margin = new Thickness(0, 0, 4, 0) };
+            Button cancel = new Button { Content = l10n.Get("dialog.taskbar.cancel"), MinHeight = 34, Margin = new Thickness(4, 0, 0, 0), IsCancel = true };
             Border footer = new Border { Child = buttons };
             if (!highContrast)
             {

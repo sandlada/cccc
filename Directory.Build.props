@@ -5,7 +5,8 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <Deterministic>true</Deterministic>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-    <Version>2.5.0</Version>
+    <Version>0.0.1-20261125.a</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <PlatformTarget>x64</PlatformTarget>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <FontDirectory Condition="'$(FontDirectory)' == ''">$(MSBuildThisFileDirectory)assets\fonts</FontDirectory>

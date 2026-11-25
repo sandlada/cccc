@@ -10,10 +10,12 @@ namespace Cccc.Application
         private readonly IClipboardReader clipboard;
         private readonly IFeedbackPresenter presenter;
         private readonly PreferencesService preferences;
+        private readonly ILocalizer localizer;
 
         public RecordCopyAttemptHandler(FeedbackSession session, ISystemClock clock,
             IForegroundWindowQuery foreground, IClipboardReader clipboard,
-            IFeedbackPresenter presenter, PreferencesService preferences)
+            IFeedbackPresenter presenter, PreferencesService preferences,
+            ILocalizer localizer = null)
         {
             this.session = session;
             this.clock = clock;
@@ -21,6 +23,7 @@ namespace Cccc.Application
             this.clipboard = clipboard;
             this.presenter = presenter;
             this.preferences = preferences;
+            this.localizer = localizer;
         }
 
         public RecordCopyAttemptResult Handle()
@@ -33,6 +36,7 @@ namespace Cccc.Application
             {
                 Count = session.Count,
                 CountText = new CappedCount(session.Count).Format(),
+                ExpectedTitle = FeedbackMapper.ResolveTitle(FeedbackEngine.SuccessTitleKey(session.Count), localizer),
                 Source = source,
                 CurrentTimeMilliseconds = now,
                 ShowPreview = preferences.Current.ShowPreview

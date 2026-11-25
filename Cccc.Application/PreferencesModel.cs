@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Cccc.Application
+﻿namespace Cccc.Application
 {
     public sealed class PreferencesModel
     {
@@ -16,5 +14,10 @@ namespace Cccc.Application
         public bool ShowBorder = true;
         public bool ShowShadow = true;
         public string FontFamily = AppearanceBounds.DefaultFontFamily;
+        public WindowPosition Position = WindowPosition.BottomLeft;
+        public int OffsetX = PositionBounds.DefaultOffset;
+        public int OffsetY = PositionBounds.DefaultOffset;
+        public bool AdaptToTaskbar = true;
+        public string Language = LanguageSettings.SystemTag;
     }
 }

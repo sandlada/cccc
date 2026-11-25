@@ -28,6 +28,21 @@ namespace Cccc.Domain.Preferences
             return cleaned.Length > MaxFontFamilyLength ? cleaned.Substring(0, MaxFontFamilyLength) : cleaned;
         }
 
+        public static bool IsDefaultFontFamily(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return true;
+            return string.Equals(value.Trim(), DefaultFontFamily, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static string ResolveEffectiveFontFamily(string configuredFontFamily, string languageDefaultFontFamily)
+        {
+            if (!IsDefaultFontFamily(configuredFontFamily))
+                return NormalizeFontFamily(configuredFontFamily);
+            if (!string.IsNullOrWhiteSpace(languageDefaultFontFamily))
+                return NormalizeFontFamily(languageDefaultFontFamily);
+            return DefaultFontFamily;
+        }
+
         public static int ClampCornerRadius(int value) =>
             Math.Clamp(value, MinCornerRadius, MaxCornerRadius);
 

@@ -34,6 +34,18 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
         // The invisible TextBlock retains the original measuring, truncation and
         // baseline behavior. Only its replacement pixels are composited normally.
         private void Changed() { InvalidateMeasure(); InvalidateVisual(); }
+        private CultureInfo culture = CultureInfo.CurrentUICulture;
+        internal CultureInfo Culture
+        {
+            get { return culture; }
+            set
+            {
+                CultureInfo next = value ?? CultureInfo.InvariantCulture;
+                if (string.Equals(culture.Name, next.Name, StringComparison.OrdinalIgnoreCase)) return;
+                culture = next;
+                Changed();
+            }
+        }
         internal string Text { get { return layout.Text; } set { if (layout.Text == value) return; layout.Text = value; Changed(); } }
         internal FontFamily FontFamily { get { return layout.FontFamily; } set { layout.FontFamily = value; Changed(); } }
         internal FontWeight FontWeight { get { return layout.FontWeight; } set { layout.FontWeight = value; Changed(); } }
@@ -143,7 +155,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             }
             double fractionX = origin.X * dpi.DpiScaleX - Math.Floor(origin.X * dpi.DpiScaleX);
             double fractionY = origin.Y * dpi.DpiScaleY - Math.Floor(origin.Y * dpi.DpiScaleY);
-            string next = String.Join("|", new string[] { Text, FontFamily.Source, FontWeight.ToString(),
+            string next = String.Join("|", new string[] { Text, culture.Name, FontFamily.Source, FontWeight.ToString(),
                 FontStyle.ToString(), FontStretch.ToString(), FontSize.ToString("R", CultureInfo.InvariantCulture),
                 Foreground.ToString(), FlowDirection.ToString(), TextTrimming.ToString(),
                 ActualWidth.ToString("R", CultureInfo.InvariantCulture), ActualHeight.ToString("R", CultureInfo.InvariantCulture),
@@ -179,7 +191,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
         {
             Stopwatch watch = Stopwatch.StartNew();
             const int pad = 1;
-            FormattedText text = new FormattedText(Text, CultureInfo.GetCultureInfo("zh-CN"), FlowDirection,
+            FormattedText text = new FormattedText(Text, culture, FlowDirection,
                 new Typeface(FontFamily, FontStyle, FontWeight, FontStretch), FontSize, Foreground,
                 null, TextFormattingMode.Ideal, dpi.DpiScaleX * Sampling);
             text.MaxLineCount = 1; text.Trimming = TextTrimming;

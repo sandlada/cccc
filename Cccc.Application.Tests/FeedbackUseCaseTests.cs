@@ -59,8 +59,8 @@ namespace Cccc.Application.Tests
                     Sequence = 43,
                     OwnerProcess = 9,
                     Supported = true,
-                    Preview = "hello",
-                    TypeLabel = "text"
+                    ContentKind = ClipboardContentKind.Text,
+                    TextPreview = "hello"
                 }
             };
             var presenter = new RecordingFeedbackPresenter();
@@ -149,7 +149,9 @@ namespace Cccc.Application.Tests
             var clipboard = new FakeClipboardReader { Sequence = 42 };
             var foreground = new FakeForegroundWindowQuery();
             var presenter = new RecordingFeedbackPresenter();
-            var handler = new SetPausedHandler(session, clipboard, foreground, presenter);
+            var localizer = new LocalizationService();
+            localizer.ApplyPreference("zh-Hans");
+            var handler = new SetPausedHandler(session, clipboard, foreground, presenter, localizer);
 
             SetPausedResult result = handler.Handle(true);
 
@@ -203,8 +205,8 @@ namespace Cccc.Application.Tests
                     Sequence = 2,
                     OwnerProcess = 9,
                     Supported = true,
-                    Preview = "text",
-                    TypeLabel = "text"
+                    ContentKind = ClipboardContentKind.Text,
+                    TextPreview = "text"
                 }
             };
             var presenter = new RecordingFeedbackPresenter();

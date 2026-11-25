@@ -21,6 +21,7 @@ namespace Cccc.Desktop
         private readonly FeedbackSession session = new FeedbackSession();
         private readonly StopwatchSystemClock clock = new StopwatchSystemClock();
         private readonly WindowsForegroundWindowQuery foreground = new WindowsForegroundWindowQuery();
+        private readonly LocalizationService localizer;
         private readonly PreferencesService preferences;
         private readonly StartupRegistration startup;
         private readonly ToastPresenter presenter;
@@ -40,10 +41,11 @@ namespace Cccc.Desktop
         private bool disposed;
         private bool faulted;
 
-        internal DesktopHost(WpfApplication app)
+        internal DesktopHost(WpfApplication app, LocalizationService localizer = null)
         {
             this.app = app;
             dispatcher = app.Dispatcher;
+            this.localizer = localizer ?? new LocalizationService(new WindowsSystemLanguageProvider());
 
             string currentFile = DesktopPaths.CurrentSettingsFile;
             string legacyFile = DesktopPaths.LegacySettingsFile;
@@ -57,9 +59,11 @@ namespace Cccc.Desktop
                 currentPreferences,
                 legacyPreferences);
             preferences.Load();
+            this.localizer.ApplyPreference(preferences.Current.Language);
+
             uninstall = new UninstallHandler(startup, currentPreferences, legacyPreferences,
                 new FileSettingsDirectory(DesktopPaths.SettingsDirectory));
-            presenter = new ToastPresenter(preferences.Current, dispatcher);
+            presenter = new ToastPresenter(preferences.Current, dispatcher, this.localizer);
         }
 
         internal void Start()
@@ -78,21 +82,21 @@ namespace Cccc.Desktop
             clipboard = new ClipboardWorker(source.Handle, clock);
 
             recordCopy = new RecordCopyAttemptHandler(session, clock, foreground, clipboard,
-                presenter, preferences);
-            var observe = new ObserveClipboardHandler(session, clock, clipboard, foreground, presenter);
-            expire = new ExpireAttemptHandler(session, clock, clipboard, presenter);
+                presenter, preferences, localizer);
+            var observe = new ObserveClipboardHandler(session, clock, clipboard, foreground, presenter, localizer);
+            expire = new ExpireAttemptHandler(session, clock, clipboard, presenter, localizer);
             reset = new ResetSessionHandler(session, clipboard);
             var handleKey = new HandleKeyHandler(session, recordCopy);
-            setPaused = new SetPausedHandler(session, clipboard, foreground, presenter);
+            setPaused = new SetPausedHandler(session, clipboard, foreground, presenter, localizer);
             var status = new ShowStatusHandler(foreground, presenter);
             var changePreferences = new ChangePreferencesHandler(preferences);
             var changeStartup = new ChangeStartupHandler(startup);
             var initialize = new InitializeSettingsHandler(preferences, startup);
 
-            Func<string> taskbarStatus = () => presenter.TaskbarStatus;
+            Func<TaskbarPlacementDecision> taskbarStatus = () => presenter.TaskbarStatus;
 
             inbound = new DesktopInputAdapter(session, preferences, startup, handleKey, observe,
-                changePreferences, changeStartup, setPaused, status, clock, dispatcher,
+                changePreferences, changeStartup, setPaused, status, localizer, clock, dispatcher,
                 shutdown.Token, delegate { return presenter.IsDark; }, taskbarStatus,
                 delegate (PreferencesModel model) { presenter.UpdatePreferences(model); },
                 SwitchLayout, delegate { return uninstall.Handle(); },
@@ -115,11 +119,12 @@ namespace Cccc.Desktop
             deadlineTimer.Start();
 
             InitializationResult initialized = initialize.Handle();
+            localizer.ApplyPreference(initialized.Preferences.Language);
             presenter.UpdatePreferences(initialized.Preferences);
             inbound.Refresh();
             if (initialized.NeedsWarning)
-                inbound.ShowWarning("部分设置未能初始化", "请在托盘菜单检查开机自启动设置。");
-            status.Handle("Cccc 已启动", "现在复制试试吧 · 右键托盘图标可设置");
+                inbound.ShowWarning(localizer.Get("warning.init_failed.title"), localizer.Get("warning.init_failed.detail"));
+            status.Handle(localizer.Get("status.started.title"), localizer.Get("status.started.detail"));
         }
 
         private void SwitchLayout(bool compact)
@@ -137,6 +142,8 @@ namespace Cccc.Desktop
             if ((message == 0x001A || message == 0x031A || message == 0x0320 || message == 0x0218) &&
                 !disposed)
             {
+                if (message == 0x001A && LanguageSettings.IsSystem(preferences.Current.Language))
+                    localizer.RefreshSystemLanguage();
                 presenter.RefreshAppearance();
                 if (inbound != null) inbound.UpdateTheme();
             }
@@ -155,7 +162,7 @@ namespace Cccc.Desktop
             if (inbound != null)
             {
                 inbound.SetPausedState(true);
-                inbound.ShowWarning("Cccc 已暂停", "检测遇到异常，请退出后重新打开。");
+                inbound.ShowWarning(localizer.Get("warning.fault_paused.title"), localizer.Get("warning.fault_paused.detail"));
             }
         }
 

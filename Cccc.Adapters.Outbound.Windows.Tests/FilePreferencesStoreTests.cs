@@ -29,7 +29,12 @@ namespace Cccc.Adapters.Outbound.Windows.Tests
                     FullCounterCornerRadius = true,
                     Padding = 14,
                     ShowBorder = false,
-                    ShowShadow = false
+                    ShowShadow = false,
+                    Position = WindowPosition.TopRight,
+                    OffsetX = -24,
+                    OffsetY = 36,
+                    AdaptToTaskbar = false,
+                    Language = "ja"
                 });
 
                 Assert.True(saved.Success);
@@ -46,6 +51,11 @@ namespace Cccc.Adapters.Outbound.Windows.Tests
                 Assert.Equal(14, loaded.Model.Padding);
                 Assert.False(loaded.Model.ShowBorder);
                 Assert.False(loaded.Model.ShowShadow);
+                Assert.Equal(WindowPosition.TopRight, loaded.Model.Position);
+                Assert.Equal(-24, loaded.Model.OffsetX);
+                Assert.Equal(36, loaded.Model.OffsetY);
+                Assert.False(loaded.Model.AdaptToTaskbar);
+                Assert.Equal("ja", loaded.Model.Language);
             }
             finally { Directory.Delete(directory, true); }
         }

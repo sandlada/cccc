@@ -9,6 +9,10 @@
     <ProjectReference Include="..\Cccc.Domain\Cccc.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Localization\Catalogs\*.json" />
+  </ItemGroup>
+
   <Target Name="ForbidOutwardPackages" BeforeTargets="CollectPackageReferences">
     <ItemGroup>
       <_Forbidden Include="@(PackageReference)" />

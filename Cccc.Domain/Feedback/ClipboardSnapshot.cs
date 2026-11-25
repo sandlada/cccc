@@ -5,7 +5,9 @@ namespace Cccc.Domain.Feedback
         public ClipboardSequence Sequence;
         public uint OwnerProcess;
         public bool Supported;
-        public string Preview = "";
-        public string TypeLabel = "";
+        public ClipboardPayloadKind ContentKind = ClipboardPayloadKind.Unsupported;
+        public string TextPreview = "";
+        public string FileName = "";
+        public int FileCount;
     }
 }

@@ -12,9 +12,11 @@ namespace Cccc.Domain.Feedback
     public sealed class Feedback
     {
         public FeedbackKind Kind;
-        public string Title = "";
-        public string Preview = "";
-        public string TypeLabel = "";
+        public FeedbackTitleKey TitleKey = FeedbackTitleKey.Copied;
+        public ClipboardPayloadKind ContentKind = ClipboardPayloadKind.Unsupported;
+        public string TextPreview = "";
+        public string FileName = "";
+        public int FileCount;
         public int Count;
         public WindowIdentity Foreground;
 

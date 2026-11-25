@@ -13,6 +13,27 @@ namespace Cccc.Application
         LabelAndContent = 6
     }
 
+    public enum WindowPosition
+    {
+        TopLeft = 0,
+        TopCenter = 1,
+        TopRight = 2,
+        MiddleLeft = 3,
+        MiddleRight = 4,
+        BottomLeft = 5,
+        BottomCenter = 6,
+        BottomRight = 7
+    }
+
+    public static class PositionBounds
+    {
+        public const int MinOffset = ToastPlacementPolicy.MinOffset;
+        public const int MaxOffset = ToastPlacementPolicy.MaxOffset;
+        public const int DefaultOffset = ToastPlacementPolicy.DefaultOffset;
+
+        public static int ClampOffset(int value) => ToastPlacementPolicy.ClampOffset(value);
+    }
+
     public static class AppearanceBounds
     {
         public const int MinCornerRadius = ToastAppearancePolicy.MinCornerRadius;

@@ -16,16 +16,16 @@ namespace Cccc.Adapters.Inbound.Desktop
             StartupRegistration startup, HandleKeyHandler handleKey,
             ObserveClipboardHandler observe, ChangePreferencesHandler changePreferences,
             ChangeStartupHandler changeStartup, SetPausedHandler setPaused,
-            ShowStatusHandler status, ISystemClock clock, Dispatcher dispatcher,
-            CancellationToken cancellationToken, Func<bool> isDark,
-            Func<string> taskbarStatus, Action<PreferencesModel> applyPreferences,
+            ShowStatusHandler status, ILocalizer localizer, ISystemClock clock,
+            Dispatcher dispatcher, CancellationToken cancellationToken, Func<bool> isDark,
+            Func<TaskbarPlacementDecision> taskbarStatus, Action<PreferencesModel> applyPreferences,
             Action<bool> switchLayout, Func<UninstallResult> uninstall,
             Action exit, string productLabel)
         {
             keyboard = new KeyboardHookListener(handleKey, dispatcher);
             clipboard = new ClipboardListener(observe, clock, dispatcher, cancellationToken);
             tray = new TrayMenu(session, preferences, startup, changePreferences, changeStartup,
-                setPaused, status, isDark, taskbarStatus, applyPreferences, switchLayout,
+                setPaused, status, localizer, isDark, taskbarStatus, applyPreferences, switchLayout,
                 uninstall, exit, productLabel);
         }
 

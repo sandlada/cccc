@@ -7,24 +7,27 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
     public sealed class ToastPresenter : IFeedbackPresenter, IDisposable
     {
         private readonly Dispatcher dispatcher;
+        private readonly ILocalizer localizer;
         private PreferencesModel preferences;
         private ToastWindow window;
         private bool disposed;
 
-        public ToastPresenter(PreferencesModel preferences, Dispatcher dispatcher)
+        public ToastPresenter(PreferencesModel preferences, Dispatcher dispatcher, ILocalizer localizer = null)
         {
             if (preferences == null) throw new ArgumentNullException("preferences");
             this.preferences = Clone(preferences);
             this.dispatcher = dispatcher ?? Dispatcher.CurrentDispatcher;
+            this.localizer = localizer ?? new LocalizationService();
+            this.localizer.LanguageChanged += OnLanguageChanged;
             ApplyProfile();
-            window = new ToastWindow(this.preferences.UseMaterial);
+            window = new ToastWindow(this.preferences.UseMaterial, this.localizer);
             window.ApplyPersonalization(this.preferences);
             if (ToastProfile.Compact) TaskbarPlacement.RequestRefresh();
         }
 
         public bool IsDark { get { return Themes.Current.Dark; } }
 
-        public string TaskbarStatus { get { return TaskbarPlacement.LastDecision; } }
+        public TaskbarPlacementDecision TaskbarStatus { get { return TaskbarPlacement.LastDecision; } }
 
         public void CopyPressed(CopyFeedbackSignal signal)
         {
@@ -32,7 +35,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             {
                 if (window == null) return;
                 window.CopyPressed(signal.Count, new IntPtr(signal.Source.Handle),
-                    signal.ShowPreview, signal.CurrentTimeMilliseconds, signal.CountText);
+                    signal.ShowPreview, signal.CurrentTimeMilliseconds, signal.CountText, signal.ExpectedTitle);
             });
         }
 
@@ -84,7 +87,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                 ApplyProfile();
                 Themes.MaterialAvailable = false;
                 Themes.Refresh();
-                window = new ToastWindow(material);
+                window = new ToastWindow(material, localizer);
                 window.ApplyPersonalization(preferences);
                 if (ToastProfile.Compact) TaskbarPlacement.RequestRefresh();
             });
@@ -101,7 +104,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
 
         public void RenderSample(string path)
         {
-            if (window == null) window = new ToastWindow(preferences.UseMaterial);
+            if (window == null) window = new ToastWindow(preferences.UseMaterial, localizer);
             window.RenderSample(path);
         }
 
@@ -109,6 +112,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
         {
             if (disposed) return;
             disposed = true;
+            localizer.LanguageChanged -= OnLanguageChanged;
             if (window != null)
             {
                 if (dispatcher.CheckAccess())
@@ -124,6 +128,15 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                     }));
                 }
             }
+        }
+
+        private void OnLanguageChanged(LanguageOption language)
+        {
+            if (disposed) return;
+            Post(delegate
+            {
+                if (window != null) window.ApplyLanguage();
+            });
         }
 
         private void ApplyProfile()
@@ -152,7 +165,12 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                 Padding = value.Padding,
                 ShowBorder = value.ShowBorder,
                 ShowShadow = value.ShowShadow,
-                FontFamily = value.FontFamily
+                FontFamily = value.FontFamily,
+                Position = value.Position,
+                OffsetX = value.OffsetX,
+                OffsetY = value.OffsetY,
+                AdaptToTaskbar = value.AdaptToTaskbar,
+                Language = value.Language
             };
         }
     }
