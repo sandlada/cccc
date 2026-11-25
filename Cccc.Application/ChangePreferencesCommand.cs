@@ -10,6 +10,8 @@ namespace Cccc.Application
         public DisplayMode? DisplayMode;
         public int? CornerRadius;
         public bool? FullCornerRadius;
+        public int? CounterCornerRadius;
+        public bool? FullCounterCornerRadius;
         public int? Padding;
         public bool? ShowBorder;
         public bool? ShowShadow;

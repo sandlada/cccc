@@ -138,6 +138,41 @@ namespace Cccc.Adapters.Inbound.Desktop
             };
             content.Children.Add(fullRoundBox);
 
+            // Counter Corner Radius
+            DockPanel counterRadiusHeader = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
+            TextBlock counterRadiusValueText = new TextBlock
+            {
+                Foreground = subtle,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            DockPanel.SetDock(counterRadiusValueText, Dock.Right);
+            counterRadiusHeader.Children.Add(counterRadiusValueText);
+            counterRadiusHeader.Children.Add(new TextBlock
+            {
+                Text = "计数器圆角半径",
+                FontWeight = FontWeights.Medium,
+                Foreground = foreground
+            });
+            content.Children.Add(counterRadiusHeader);
+
+            Slider counterRadiusSlider = new Slider
+            {
+                Minimum = AppearanceBounds.MinCounterCornerRadius,
+                Maximum = AppearanceBounds.MaxCounterCornerRadius,
+                TickFrequency = 1,
+                IsSnapToTickEnabled = true,
+                Margin = new Thickness(0, 0, 0, 6)
+            };
+            content.Children.Add(counterRadiusSlider);
+
+            CheckBox fullCounterRoundBox = new CheckBox
+            {
+                Content = "计数器满圆（高度 / 2）",
+                Foreground = foreground,
+                Margin = new Thickness(0, 0, 0, 14)
+            };
+            content.Children.Add(fullCounterRoundBox);
+
             // Padding
             DockPanel paddingHeader = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
             TextBlock paddingValueText = new TextBlock
@@ -241,6 +276,12 @@ namespace Cccc.Adapters.Inbound.Desktop
                     radiusValueText.Text = m.FullCornerRadius
                         ? $"满圆 ({maxRadius:0} px)"
                         : (radiusSlider.Value >= maxRadius ? $"满圆 ({maxRadius:0} px)" : $"{m.CornerRadius} px");
+                    counterRadiusSlider.Value = m.FullCounterCornerRadius ? AppearanceBounds.MaxCounterCornerRadius : m.CounterCornerRadius;
+                    fullCounterRoundBox.IsChecked = m.FullCounterCornerRadius;
+                    counterRadiusSlider.IsEnabled = !m.FullCounterCornerRadius;
+                    counterRadiusValueText.Text = m.FullCounterCornerRadius || counterRadiusSlider.Value >= AppearanceBounds.MaxCounterCornerRadius
+                        ? $"满圆 ({AppearanceBounds.MaxCounterCornerRadius} px)"
+                        : $"{m.CounterCornerRadius} px";
                     paddingSlider.Value = m.Padding;
                     paddingValueText.Text = $"{m.Padding} px";
                     borderBox.IsChecked = m.ShowBorder;
@@ -279,6 +320,18 @@ namespace Cccc.Adapters.Inbound.Desktop
             {
                 ApplyChange(new ChangePreferencesCommand { FullCornerRadius = false });
             };
+            counterRadiusSlider.ValueChanged += delegate
+            {
+                ApplyChange(new ChangePreferencesCommand { CounterCornerRadius = (int)Math.Round(counterRadiusSlider.Value) });
+            };
+            fullCounterRoundBox.Checked += delegate
+            {
+                ApplyChange(new ChangePreferencesCommand { FullCounterCornerRadius = true });
+            };
+            fullCounterRoundBox.Unchecked += delegate
+            {
+                ApplyChange(new ChangePreferencesCommand { FullCounterCornerRadius = false });
+            };
             paddingSlider.ValueChanged += delegate
             {
                 ApplyChange(new ChangePreferencesCommand { Padding = (int)Math.Round(paddingSlider.Value) });
@@ -303,6 +356,8 @@ namespace Cccc.Adapters.Inbound.Desktop
                     DisplayMode = DisplayMode.Full,
                     CornerRadius = AppearanceBounds.DefaultCornerRadius,
                     FullCornerRadius = false,
+                    CounterCornerRadius = AppearanceBounds.DefaultCounterCornerRadius,
+                    FullCounterCornerRadius = false,
                     Padding = AppearanceBounds.DefaultPadding,
                     ShowBorder = true,
                     ShowShadow = true,

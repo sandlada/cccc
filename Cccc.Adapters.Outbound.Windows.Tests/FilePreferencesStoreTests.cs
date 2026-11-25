@@ -25,6 +25,8 @@ namespace Cccc.Adapters.Outbound.Windows.Tests
                     DisplayMode = DisplayMode.IconAndLabel,
                     CornerRadius = 12,
                     FullCornerRadius = true,
+                    CounterCornerRadius = 4,
+                    FullCounterCornerRadius = true,
                     Padding = 14,
                     ShowBorder = false,
                     ShowShadow = false
@@ -39,6 +41,8 @@ namespace Cccc.Adapters.Outbound.Windows.Tests
                 Assert.Equal(DisplayMode.IconAndLabel, loaded.Model.DisplayMode);
                 Assert.Equal(12, loaded.Model.CornerRadius);
                 Assert.True(loaded.Model.FullCornerRadius);
+                Assert.Equal(4, loaded.Model.CounterCornerRadius);
+                Assert.True(loaded.Model.FullCounterCornerRadius);
                 Assert.Equal(14, loaded.Model.Padding);
                 Assert.False(loaded.Model.ShowBorder);
                 Assert.False(loaded.Model.ShowShadow);

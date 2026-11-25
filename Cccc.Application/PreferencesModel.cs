@@ -10,6 +10,8 @@ namespace Cccc.Application
         public DisplayMode DisplayMode = DisplayMode.Full;
         public int CornerRadius = AppearanceBounds.DefaultCornerRadius;
         public bool FullCornerRadius = false;
+        public int CounterCornerRadius = AppearanceBounds.DefaultCounterCornerRadius;
+        public bool FullCounterCornerRadius = false;
         public int Padding = AppearanceBounds.DefaultPadding;
         public bool ShowBorder = true;
         public bool ShowShadow = true;

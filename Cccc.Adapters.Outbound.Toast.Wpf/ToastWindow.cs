@@ -50,6 +50,8 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
         private ToastDisplayMode displayMode = ToastDisplayMode.Full;
         private int cornerRadius = ToastAppearancePolicy.DefaultCornerRadius;
         private bool fullCornerRadius;
+        private int counterCornerRadius = ToastAppearancePolicy.DefaultCounterCornerRadius;
+        private bool fullCounterCornerRadius;
         private int cardPadding = ToastAppearancePolicy.DefaultPadding;
         private bool showBorder = true;
         private bool showShadow = true;
@@ -271,6 +273,8 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             displayMode = (ToastDisplayMode)preferences.DisplayMode;
             cornerRadius = preferences.CornerRadius;
             fullCornerRadius = preferences.FullCornerRadius;
+            counterCornerRadius = preferences.CounterCornerRadius;
+            fullCounterCornerRadius = preferences.FullCounterCornerRadius;
             cardPadding = preferences.Padding;
             showBorder = preferences.ShowBorder;
             showShadow = preferences.ShowShadow;
@@ -281,6 +285,10 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
 
         private void RecalculateCardGeometry()
         {
+            double counterH = ToastProfile.Compact ? 20 : 28;
+            counter.CornerRadius = new CornerRadius(ToastProfile.Compact && !fullCounterCornerRadius && counterCornerRadius == ToastAppearancePolicy.DefaultCounterCornerRadius
+                ? 10
+                : ToastAppearancePolicy.ResolveCounterCornerRadius(counterCornerRadius, fullCounterCornerRadius, counterH));
             if (ToastProfile.Compact)
             {
                 maxOuterWidth = CardBackgroundRenderer.LogicalWidth;
@@ -349,6 +357,10 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
 
         private void ApplyCardWidthFrame()
         {
+            double counterH = ToastProfile.Compact ? 20 : 28;
+            counter.CornerRadius = new CornerRadius(ToastProfile.Compact && !fullCounterCornerRadius && counterCornerRadius == ToastAppearancePolicy.DefaultCounterCornerRadius
+                ? 10
+                : ToastAppearancePolicy.ResolveCounterCornerRadius(counterCornerRadius, fullCounterCornerRadius, counterH));
             if (ToastProfile.Compact)
             {
                 card.Width = 225;

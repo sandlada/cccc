@@ -41,6 +41,11 @@ namespace Cccc.Adapters.Outbound.Windows
                         result.Model.CornerRadius = AppearanceBounds.ClampCornerRadius(cornerRadius);
                     else if (line == "corner_full=on") result.Model.FullCornerRadius = true;
                     else if (line == "corner_full=off") result.Model.FullCornerRadius = false;
+                    else if (line.StartsWith("counter_corner_radius=", StringComparison.Ordinal) &&
+                        int.TryParse(line.Substring("counter_corner_radius=".Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out int counterCornerRadius))
+                        result.Model.CounterCornerRadius = AppearanceBounds.ClampCounterCornerRadius(counterCornerRadius);
+                    else if (line == "counter_corner_full=on") result.Model.FullCounterCornerRadius = true;
+                    else if (line == "counter_corner_full=off") result.Model.FullCounterCornerRadius = false;
                     else if (line.StartsWith("padding=", StringComparison.Ordinal) &&
                         int.TryParse(line.Substring("padding=".Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out int padding))
                         result.Model.Padding = AppearanceBounds.ClampPadding(padding);
@@ -104,6 +109,8 @@ namespace Cccc.Adapters.Outbound.Windows
                 text += "display=" + FormatDisplayMode(model.DisplayMode) + Environment.NewLine +
                     "corner_radius=" + AppearanceBounds.ClampCornerRadius(model.CornerRadius).ToString(CultureInfo.InvariantCulture) + Environment.NewLine +
                     (model.FullCornerRadius ? "corner_full=on" : "corner_full=off") + Environment.NewLine +
+                    "counter_corner_radius=" + AppearanceBounds.ClampCounterCornerRadius(model.CounterCornerRadius).ToString(CultureInfo.InvariantCulture) + Environment.NewLine +
+                    (model.FullCounterCornerRadius ? "counter_corner_full=on" : "counter_corner_full=off") + Environment.NewLine +
                     "padding=" + AppearanceBounds.ClampPadding(model.Padding).ToString(CultureInfo.InvariantCulture) + Environment.NewLine +
                     (model.ShowBorder ? "border=on" : "border=off") + Environment.NewLine +
                     (model.ShowShadow ? "shadow=on" : "shadow=off") + Environment.NewLine;

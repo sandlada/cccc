@@ -147,6 +147,8 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                 DisplayMode = value.DisplayMode,
                 CornerRadius = value.CornerRadius,
                 FullCornerRadius = value.FullCornerRadius,
+                CounterCornerRadius = value.CounterCornerRadius,
+                FullCounterCornerRadius = value.FullCounterCornerRadius,
                 Padding = value.Padding,
                 ShowBorder = value.ShowBorder,
                 ShowShadow = value.ShowShadow

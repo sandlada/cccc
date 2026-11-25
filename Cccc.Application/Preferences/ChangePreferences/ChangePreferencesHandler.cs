@@ -20,6 +20,8 @@ namespace Cccc.Application
             if (command.DisplayMode is { } displayMode) model.DisplayMode = displayMode;
             if (command.CornerRadius is { } cornerRadius) model.CornerRadius = ToastAppearancePolicy.ClampCornerRadius(cornerRadius);
             if (command.FullCornerRadius is { } fullCornerRadius) model.FullCornerRadius = fullCornerRadius;
+            if (command.CounterCornerRadius is { } counterCornerRadius) model.CounterCornerRadius = ToastAppearancePolicy.ClampCounterCornerRadius(counterCornerRadius);
+            if (command.FullCounterCornerRadius is { } fullCounterCornerRadius) model.FullCounterCornerRadius = fullCounterCornerRadius;
             if (command.Padding is { } padding) model.Padding = ToastAppearancePolicy.ClampPadding(padding);
             if (command.ShowBorder is { } showBorder) model.ShowBorder = showBorder;
             if (command.ShowShadow is { } showShadow) model.ShowShadow = showShadow;

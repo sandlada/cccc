@@ -53,14 +53,17 @@ namespace Cccc.Presentation.Verification
         private CheckBox showPreviewCheck;
         private CheckBox materialCheck;
         private CheckBox fullCornerRadiusCheck;
+        private CheckBox fullCounterCornerRadiusCheck;
         private CheckBox showBorderCheck;
         private CheckBox showShadowCheck;
         private CheckBox autoSaveCheck;
         private Slider countSlider;
         private Slider cornerRadiusSlider;
+        private Slider counterCornerRadiusSlider;
         private Slider paddingSlider;
         private TextBlock countLabel;
         private TextBlock cornerRadiusLabel;
+        private TextBlock counterCornerRadiusLabel;
         private TextBlock paddingLabel;
         private TextBlock stateLabel;
         private TextBlock statusLabel;
@@ -271,6 +274,17 @@ namespace Cccc.Presentation.Verification
                 cornerRadiusSlider.IsEnabled = true;
                 ApplyPersonalizationLive();
             };
+            counterCornerRadiusSlider.ValueChanged += delegate { ApplyPersonalizationLive(); };
+            fullCounterCornerRadiusCheck.Checked += delegate
+            {
+                counterCornerRadiusSlider.IsEnabled = false;
+                ApplyPersonalizationLive();
+            };
+            fullCounterCornerRadiusCheck.Unchecked += delegate
+            {
+                counterCornerRadiusSlider.IsEnabled = true;
+                ApplyPersonalizationLive();
+            };
             paddingSlider.ValueChanged += delegate { ApplyPersonalizationLive(); };
             showBorderCheck.Checked += delegate { ApplyPersonalizationLive(); };
             showBorderCheck.Unchecked += delegate { ApplyPersonalizationLive(); };
@@ -379,6 +393,7 @@ namespace Cccc.Presentation.Verification
             showPreviewCheck = CreateCheckBox("顯示內容預覽", true);
             materialCheck = CreateCheckBox("啟用 Acrylic 材質", true);
             fullCornerRadiusCheck = CreateCheckBox("滿圓（高度 / 2）", false);
+            fullCounterCornerRadiusCheck = CreateCheckBox("計數器滿圓（高度 / 2）", false);
             showBorderCheck = CreateCheckBox("顯示邊框 (Border)", true);
             showShadowCheck = CreateCheckBox("顯示陰影 (Shadow)", true);
             autoSaveCheck = CreateCheckBox("即時同步至 Cccc 設定檔", true);
@@ -395,6 +410,24 @@ namespace Cccc.Presentation.Verification
             cornerRadiusLabel = new TextBlock
             {
                 Text = AppearanceBounds.DefaultCornerRadius + " px",
+                Foreground = TextBrush,
+                FontWeight = FontWeights.SemiBold,
+                FontFamily = new FontFamily("Consolas"),
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+
+            counterCornerRadiusSlider = new Slider
+            {
+                Minimum = AppearanceBounds.MinCounterCornerRadius,
+                Maximum = AppearanceBounds.MaxCounterCornerRadius,
+                Value = AppearanceBounds.DefaultCounterCornerRadius,
+                TickFrequency = 1,
+                IsSnapToTickEnabled = true,
+                Margin = new Thickness(0, 4, 0, 0)
+            };
+            counterCornerRadiusLabel = new TextBlock
+            {
+                Text = AppearanceBounds.DefaultCounterCornerRadius + " px",
                 Foreground = TextBrush,
                 FontWeight = FontWeights.SemiBold,
                 FontFamily = new FontFamily("Consolas"),
@@ -507,6 +540,19 @@ namespace Cccc.Presentation.Verification
             appearance.Children.Add(radiusHeader);
             appearance.Children.Add(cornerRadiusSlider);
             appearance.Children.Add(fullCornerRadiusCheck);
+
+            Grid counterRadiusHeader = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+            counterRadiusHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            counterRadiusHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            TextBlock counterRadiusTitle = Label("計數器圓角半徑");
+            counterRadiusTitle.Margin = new Thickness(0);
+            counterRadiusTitle.VerticalAlignment = VerticalAlignment.Center;
+            counterRadiusHeader.Children.Add(counterRadiusTitle);
+            Grid.SetColumn(counterCornerRadiusLabel, 1);
+            counterRadiusHeader.Children.Add(counterCornerRadiusLabel);
+            appearance.Children.Add(counterRadiusHeader);
+            appearance.Children.Add(counterCornerRadiusSlider);
+            appearance.Children.Add(fullCounterCornerRadiusCheck);
 
             Grid padHeader = new Grid { Margin = new Thickness(0, 8, 0, 0) };
             padHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -710,6 +756,12 @@ namespace Cccc.Presentation.Verification
                 cornerRadiusLabel.Text = model.FullCornerRadius || cornerRadiusSlider.Value >= maxRadius
                     ? $"滿圓 ({maxRadius:0} px)"
                     : model.CornerRadius + " px";
+                counterCornerRadiusSlider.Value = model.FullCounterCornerRadius ? AppearanceBounds.MaxCounterCornerRadius : model.CounterCornerRadius;
+                fullCounterCornerRadiusCheck.IsChecked = model.FullCounterCornerRadius;
+                counterCornerRadiusSlider.IsEnabled = !model.FullCounterCornerRadius;
+                counterCornerRadiusLabel.Text = model.FullCounterCornerRadius || counterCornerRadiusSlider.Value >= AppearanceBounds.MaxCounterCornerRadius
+                    ? $"滿圓 ({AppearanceBounds.MaxCounterCornerRadius} px)"
+                    : model.CounterCornerRadius + " px";
                 paddingSlider.Value = model.Padding;
                 paddingLabel.Text = model.Padding + " px";
                 showBorderCheck.IsChecked = model.ShowBorder;
@@ -740,6 +792,8 @@ namespace Cccc.Presentation.Verification
                 UseMaterial = materialCheck.IsChecked == true,
                 CornerRadius = (int)Math.Round(cornerRadiusSlider.Value),
                 FullCornerRadius = fullCornerRadiusCheck.IsChecked == true,
+                CounterCornerRadius = (int)Math.Round(counterCornerRadiusSlider.Value),
+                FullCounterCornerRadius = fullCounterCornerRadiusCheck.IsChecked == true,
                 Padding = (int)Math.Round(paddingSlider.Value),
                 ShowBorder = showBorderCheck.IsChecked == true,
                 ShowShadow = showShadowCheck.IsChecked == true
@@ -767,6 +821,15 @@ namespace Cccc.Presentation.Verification
             cornerRadiusLabel.Text = currentPreferences.FullCornerRadius || currentPreferences.CornerRadius >= maxRadius
                 ? $"滿圓 ({maxRadius:0} px)"
                 : currentPreferences.CornerRadius + " px";
+            if (currentPreferences.FullCounterCornerRadius)
+            {
+                updatingControls = true;
+                try { counterCornerRadiusSlider.Value = AppearanceBounds.MaxCounterCornerRadius; }
+                finally { updatingControls = false; }
+            }
+            counterCornerRadiusLabel.Text = currentPreferences.FullCounterCornerRadius || currentPreferences.CounterCornerRadius >= AppearanceBounds.MaxCounterCornerRadius
+                ? $"滿圓 ({AppearanceBounds.MaxCounterCornerRadius} px)"
+                : currentPreferences.CounterCornerRadius + " px";
             paddingLabel.Text = currentPreferences.Padding + " px";
             if (toast != null)
             {
