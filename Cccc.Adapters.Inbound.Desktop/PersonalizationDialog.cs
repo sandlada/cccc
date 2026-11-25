@@ -230,6 +230,42 @@ namespace Cccc.Adapters.Inbound.Desktop
             content.Children.Add(previewBox);
             content.Children.Add(materialBox);
 
+            // Font Family
+            content.Children.Add(new TextBlock
+            {
+                Text = "字体 (Font Family)",
+                FontWeight = FontWeights.Medium,
+                Foreground = foreground,
+                Margin = new Thickness(0, 10, 0, 6)
+            });
+            Grid fontRow = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+            fontRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            fontRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            TextBox fontFamilyBox = new TextBox
+            {
+                Padding = new Thickness(8, 5, 8, 5),
+                VerticalContentAlignment = VerticalAlignment.Center,
+                ToolTip = "输入系统已安装的字体名称（支持逗号分隔多个回退字体），留空则恢复默认"
+            };
+            if (!highContrast && dark)
+            {
+                fontFamilyBox.Background = new SolidColorBrush(Color.FromRgb(32, 32, 32));
+                fontFamilyBox.Foreground = foreground;
+                fontFamilyBox.BorderBrush = new SolidColorBrush(Color.FromRgb(72, 72, 72));
+            }
+            Button applyFontButton = new Button
+            {
+                Content = "应用",
+                MinWidth = 56,
+                Padding = new Thickness(10, 5, 10, 5),
+                Margin = new Thickness(8, 0, 0, 0)
+            };
+            Grid.SetColumn(fontFamilyBox, 0);
+            Grid.SetColumn(applyFontButton, 1);
+            fontRow.Children.Add(fontFamilyBox);
+            fontRow.Children.Add(applyFontButton);
+            content.Children.Add(fontRow);
+
             // Footer buttons
             Grid buttons = new Grid { Margin = new Thickness(24, 12, 24, 16) };
             buttons.ColumnDefinitions.Add(new ColumnDefinition());
@@ -288,6 +324,7 @@ namespace Cccc.Adapters.Inbound.Desktop
                     shadowBox.IsChecked = m.ShowShadow;
                     previewBox.IsChecked = m.ShowPreview;
                     materialBox.IsChecked = m.UseMaterial;
+                    fontFamilyBox.Text = m.FontFamily ?? AppearanceBounds.DefaultFontFamily;
                 }
                 finally { suppress = false; }
             }
@@ -344,6 +381,20 @@ namespace Cccc.Adapters.Inbound.Desktop
             previewBox.Unchecked += delegate { ApplyChange(new ChangePreferencesCommand { ShowPreview = false }); };
             materialBox.Checked += delegate { ApplyChange(new ChangePreferencesCommand { UseMaterial = true }); };
             materialBox.Unchecked += delegate { ApplyChange(new ChangePreferencesCommand { UseMaterial = false }); };
+            void CommitFontFamily()
+            {
+                ApplyChange(new ChangePreferencesCommand { FontFamily = fontFamilyBox.Text });
+            }
+            applyFontButton.Click += delegate { CommitFontFamily(); };
+            fontFamilyBox.KeyDown += (_, e) =>
+            {
+                if (e.Key == System.Windows.Input.Key.Enter)
+                {
+                    CommitFontFamily();
+                    e.Handled = true;
+                }
+            };
+            fontFamilyBox.LostKeyboardFocus += delegate { CommitFontFamily(); };
 
             previewButton.Click += delegate
             {
@@ -362,7 +413,8 @@ namespace Cccc.Adapters.Inbound.Desktop
                     ShowBorder = true,
                     ShowShadow = true,
                     ShowPreview = true,
-                    UseMaterial = true
+                    UseMaterial = true,
+                    FontFamily = AppearanceBounds.DefaultFontFamily
                 });
             };
             closeButton.Click += delegate { dialog.Close(); };

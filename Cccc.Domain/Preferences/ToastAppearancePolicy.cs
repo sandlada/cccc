@@ -16,6 +16,18 @@ namespace Cccc.Domain.Preferences
         public const int MaxPadding = 36;
         public const int DefaultPadding = 20;
 
+        public const int MaxFontFamilyLength = 256;
+        public const string DefaultFontFamily =
+            "Noto Sans, Noto Sans SC, Noto Sans TC, Noto Sans JP, Noto Sans KR, Segoe UI, Microsoft YaHei UI, Microsoft JhengHei UI, Yu Gothic UI, Malgun Gothic";
+
+        public static string NormalizeFontFamily(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return DefaultFontFamily;
+            string cleaned = value.Replace('\r', ' ').Replace('\n', ' ').Trim();
+            if (cleaned.Length == 0) return DefaultFontFamily;
+            return cleaned.Length > MaxFontFamilyLength ? cleaned.Substring(0, MaxFontFamilyLength) : cleaned;
+        }
+
         public static int ClampCornerRadius(int value) =>
             Math.Clamp(value, MinCornerRadius, MaxCornerRadius);
 

@@ -142,19 +142,8 @@ if ($Uninstall) {
     exit 0
 }
 
-# Fonts are embedded WPF resources, never installed or downloaded by this script.
-# Keep the two original faces and the original resource names.
+# Fonts are resolved from system/user-configured font families rather than embedded in the binary.
 $fontRoot = Get-FullPath $FontDirectory
-$missingFonts = @()
-foreach ($font in @('vivoSans-Medium.ttf', 'vivoSans-Bold.ttf')) {
-    $fontPath = Join-Path $fontRoot $font
-    if (-not (Test-Path -LiteralPath $fontPath -PathType Leaf)) { $missingFonts += $fontPath }
-}
-if ($missingFonts.Count -gt 0) {
-    throw ("Missing embedded font resource(s):`n  " + ($missingFonts -join "`n  ") +
-        "`nCccc embeds vivo Sans Medium and Bold as WPF resources. See assets/fonts/README.md, or pass -FontDirectory.")
-}
-
 & dotnet build $solution -c $Configuration --nologo ("-p:FontDirectory=" + $fontRoot)
 if ($LASTEXITCODE -ne 0) { throw ('dotnet build failed with exit code {0}.' -f $LASTEXITCODE) }
 

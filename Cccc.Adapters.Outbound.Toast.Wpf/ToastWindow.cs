@@ -55,6 +55,7 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
         private int cardPadding = ToastAppearancePolicy.DefaultPadding;
         private bool showBorder = true;
         private bool showShadow = true;
+        private FontFamily toastFontFamily = EmbeddedFonts.Family;
         private int maxOuterWidth = CardBackgroundRenderer.LogicalWidth;
         private int maxOuterHeight = CardBackgroundRenderer.LogicalHeight;
         private double baseCardWidth = 298;
@@ -278,6 +279,15 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
             cardPadding = preferences.Padding;
             showBorder = preferences.ShowBorder;
             showShadow = preferences.ShowShadow;
+            FontFamily nextFont = EmbeddedFonts.ResolveFontFamily(preferences.FontFamily);
+            if (!Equals(toastFontFamily, nextFont))
+            {
+                toastFontFamily = nextFont;
+                FontFamily = nextFont;
+                title.FontFamily = nextFont;
+                detail.FontFamily = nextFont;
+                symbol.FontFamily = nextFont;
+            }
             RecalculateCardGeometry();
             if (windowHandle != IntPtr.Zero) Position(anchorWindow);
             if (IsVisible && Current != null) PrepareVisibleText();
@@ -911,8 +921,8 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
         }
         internal bool VerifyFontBinding()
         {
-            return title.FontFamily == EmbeddedFonts.Family && detail.FontFamily == EmbeddedFonts.Family &&
-                symbol.FontFamily == EmbeddedFonts.Family && title.FontWeight.ToOpenTypeWeight() == 650 &&
+            return title.FontFamily == toastFontFamily && detail.FontFamily == toastFontFamily &&
+                symbol.FontFamily == toastFontFamily && title.FontWeight.ToOpenTypeWeight() == 650 &&
                 symbol.FontWeight.ToOpenTypeWeight() == 650 && detail.FontWeight.ToOpenTypeWeight() == 500 &&
                 title.FontSize == 14 && detail.FontSize == 12 && times.FontSize == 12;
         }

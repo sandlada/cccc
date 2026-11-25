@@ -26,10 +26,12 @@ namespace Cccc.Application
         public const int MinPadding = ToastAppearancePolicy.MinPadding;
         public const int MaxPadding = ToastAppearancePolicy.MaxPadding;
         public const int DefaultPadding = ToastAppearancePolicy.DefaultPadding;
+        public const string DefaultFontFamily = ToastAppearancePolicy.DefaultFontFamily;
 
         public static int ClampCornerRadius(int value) => ToastAppearancePolicy.ClampCornerRadius(value);
         public static int ClampCounterCornerRadius(int value) => ToastAppearancePolicy.ClampCounterCornerRadius(value);
         public static int ClampPadding(int value) => ToastAppearancePolicy.ClampPadding(value);
+        public static string NormalizeFontFamily(string value) => ToastAppearancePolicy.NormalizeFontFamily(value);
         public static double ComputeCardHeight(DisplayMode mode, int padding) =>
             ToastAppearancePolicy.ComputeCardHeight((ToastDisplayMode)mode, padding);
     }

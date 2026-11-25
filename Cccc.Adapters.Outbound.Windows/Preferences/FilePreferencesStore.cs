@@ -53,6 +53,8 @@ namespace Cccc.Adapters.Outbound.Windows
                     else if (line == "border=off") result.Model.ShowBorder = false;
                     else if (line == "shadow=on") result.Model.ShowShadow = true;
                     else if (line == "shadow=off") result.Model.ShowShadow = false;
+                    else if (line.StartsWith("font_family=", StringComparison.Ordinal))
+                        result.Model.FontFamily = AppearanceBounds.NormalizeFontFamily(line.Substring("font_family=".Length));
                 }
             }
             catch (IOException error) when (error is FileNotFoundException or DirectoryNotFoundException)
@@ -113,7 +115,8 @@ namespace Cccc.Adapters.Outbound.Windows
                     (model.FullCounterCornerRadius ? "counter_corner_full=on" : "counter_corner_full=off") + Environment.NewLine +
                     "padding=" + AppearanceBounds.ClampPadding(model.Padding).ToString(CultureInfo.InvariantCulture) + Environment.NewLine +
                     (model.ShowBorder ? "border=on" : "border=off") + Environment.NewLine +
-                    (model.ShowShadow ? "shadow=on" : "shadow=off") + Environment.NewLine;
+                    (model.ShowShadow ? "shadow=on" : "shadow=off") + Environment.NewLine +
+                    "font_family=" + AppearanceBounds.NormalizeFontFamily(model.FontFamily) + Environment.NewLine;
                 File.WriteAllText(temporary, text);
                 if (File.Exists(target)) File.Replace(temporary, target, null);
                 else File.Move(temporary, target);

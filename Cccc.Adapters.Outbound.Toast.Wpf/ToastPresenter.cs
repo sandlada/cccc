@@ -151,7 +151,8 @@ namespace Cccc.Adapters.Outbound.Toast.Wpf
                 FullCounterCornerRadius = value.FullCounterCornerRadius,
                 Padding = value.Padding,
                 ShowBorder = value.ShowBorder,
-                ShowShadow = value.ShowShadow
+                ShowShadow = value.ShowShadow,
+                FontFamily = value.FontFamily
             };
         }
     }

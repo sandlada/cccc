@@ -15,5 +15,6 @@ namespace Cccc.Application
         public int Padding = AppearanceBounds.DefaultPadding;
         public bool ShowBorder = true;
         public bool ShowShadow = true;
+        public string FontFamily = AppearanceBounds.DefaultFontFamily;
     }
 }

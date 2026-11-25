@@ -18,11 +18,4 @@
       <_Parameter1>Cccc.Presentation.Verification</_Parameter1>
     </AssemblyAttribute>
   </ItemGroup>
-
-  <ItemGroup>
-    <Resource Include="$(FontDirectory)\vivoSans-Medium.ttf" Link="Fonts\vivoSans-Medium.ttf"
-              Condition="Exists('$(FontDirectory)\vivoSans-Medium.ttf')" />
-    <Resource Include="$(FontDirectory)\vivoSans-Bold.ttf" Link="Fonts\vivoSans-Bold.ttf"
-              Condition="Exists('$(FontDirectory)\vivoSans-Bold.ttf')" />
-  </ItemGroup>
 </Project>

@@ -15,5 +15,6 @@ namespace Cccc.Application
         public int? Padding;
         public bool? ShowBorder;
         public bool? ShowShadow;
+        public string FontFamily;
     }
 }

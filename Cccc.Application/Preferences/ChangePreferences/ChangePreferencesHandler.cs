@@ -25,6 +25,7 @@ namespace Cccc.Application
             if (command.Padding is { } padding) model.Padding = ToastAppearancePolicy.ClampPadding(padding);
             if (command.ShowBorder is { } showBorder) model.ShowBorder = showBorder;
             if (command.ShowShadow is { } showShadow) model.ShowShadow = showShadow;
+            if (command.FontFamily is { } fontFamily) model.FontFamily = ToastAppearancePolicy.NormalizeFontFamily(fontFamily);
 
             bool saved = preferences.Save(out string error);
             return new()

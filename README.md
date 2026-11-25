@@ -79,6 +79,6 @@ Cccc 以绿色文件夹分发，不写入程序目录以外的可执行文件，
 
 项目代码采用 [MIT License](LICENSE)。
 
-卡片文字使用 vivo Sans，计数器使用系统字体 Bahnschrift。vivo Sans 遵循原作者授权，不属于项目的 MIT 许可范围；仓库不包含原始字体文件，构建时需要自行准备。详见[字体与第三方说明](docs/third-party.md)。
+卡片文字默认使用 Noto Sans 系列回退链（`Noto Sans, Noto Sans SC, Noto Sans TC, Noto Sans JP, Noto Sans KR` 并回退到系统 UI 字体），也可在个性化设置中自定义任意系统字体；计数器使用系统字体 Bahnschrift。详见[字体与第三方说明](docs/third-party.md)。
 
 [2.4.6 历史使用方法](docs/usage-v2.4.6.txt)、[构建步骤](docs/building.md)和[2.4.6 历史设计参数](docs/design-v2.4.6.json)见仓库中的相关文档。

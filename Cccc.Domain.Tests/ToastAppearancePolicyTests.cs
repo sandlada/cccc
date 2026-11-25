@@ -50,5 +50,17 @@ namespace Cccc.Domain.Tests
             Assert.Equal(30, ToastAppearancePolicy.ResolveCornerRadius(40, false, 120, 60));
             Assert.Equal(0, ToastAppearancePolicy.ResolveCornerRadius(0, false, 360, 80));
         }
+
+        [Fact]
+        public void Font_family_normalization_falls_back_trims_and_clamps()
+        {
+            Assert.Equal(ToastAppearancePolicy.DefaultFontFamily, ToastAppearancePolicy.NormalizeFontFamily(null));
+            Assert.Equal(ToastAppearancePolicy.DefaultFontFamily, ToastAppearancePolicy.NormalizeFontFamily("   "));
+            Assert.Equal("Consolas, Segoe UI", ToastAppearancePolicy.NormalizeFontFamily("  Consolas, Segoe UI\r\n"));
+
+            string tooLong = new string('A', ToastAppearancePolicy.MaxFontFamilyLength + 20);
+            string normalized = ToastAppearancePolicy.NormalizeFontFamily(tooLong);
+            Assert.Equal(ToastAppearancePolicy.MaxFontFamilyLength, normalized.Length);
+        }
     }
 }
