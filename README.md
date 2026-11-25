@@ -4,81 +4,63 @@
 
 # Cccc
 
-一款 Windows 复制反馈工具。
+一款用于 Windows 的剪贴板复制反馈工具。执行复制操作时，在屏幕指定位置显示非抢占焦点的提示窗口，用于确认复制结果、预览内容并记录连续复制次数。
 
-按下 **Ctrl+C** 后，Cccc 会显示提示卡片，帮助你确认复制结果。卡片可以显示内容预览；连续复制时，会显示次数，并通过文字变化和动画提供反馈。
+<video src="docs/explorer_NWBIepwEBq.mp4" controls width="640">
+  <a href="docs/explorer_NWBIepwEBq.mp4">示例视频</a>
+</video>
 
-![Cccc 连续复制演示：提示文字、计数与卡片同步响应](docs/media/demo.gif)
+## 功能特性
 
-> 演示媒体仍为上一版整卡弹跳；当前版本改为徽章形变，参数与录屏检查见[形状引擎说明](docs/shape.md)。
+- **复制反馈与连续计数**：首次复制时淡入提示；连续复制时展示递增计数与 Material 3 Expressive 徽章形变动画，操作停止后自动淡出。
+- **内容预览**：支持显示已复制的文本或文件摘要；不保存剪贴板历史，亦不上传任何剪贴板数据。
+- **外观与个性化**：
+  - 跟随 Windows 浅色/深色模式，支持 Acrylic 材质与不透明背景切换。
+  - 提供普通卡片与任务栏单行（实验性）两种提示样式。
+  - 支持在“个性化设置”中调整显示位置、偏移量、圆角半径、内边距、边框、阴影及字体族（默认使用 Noto Sans 系列回退链）。
+- **多语言支持**：内置简体中文、繁体中文、英语、日语、韩语，支持跟随系统语言或手动切换。
+- **系统托盘控制**：提供暂停提示、内容预览开关、高级材质开关、开机自启动、提示样式、语言切换、个性化设置及卸载入口。
 
-[观看完整演示 · 约 11 秒](docs/media/demo.mp4)
+## 运行环境
 
-## 复制反馈
+- **操作系统**：Windows x64（`net10.0-windows10.0.19041.0`）
+- **运行时**：.NET 10 Desktop Runtime（x64）
 
-首次复制时，卡片淡入。继续复制时，徽章会沿着 Material 3 Expressive 形状序列连续变形，每次旋转 45°；卡片可见期间，徽章还会以约 45°/秒缓慢自转，计数器同时短暂放大后恢复。卡片本身不再缩放，动画只发生在徽章这一小块区域。停止操作后，卡片自动淡出，徽章回到初始角度。
+## 构建与测试
 
-形状与动画的实现、数值对拍和视觉检查见[形状引擎说明](docs/shape.md)。
+使用仓库根目录的 `build.ps1` 构建项目并输出至 `artifacts/build/`：
 
-- **内容预览**：显示刚复制的文字或文件信息，可以在托盘菜单中关闭。
-- **重复复制计数**：显示连续复制次数，配合不同提示语和弹跳动画。
-- **主题适配**：跟随 Windows 浅色或深色模式，支持 Acrylic 材质，也可以切换为不透明背景。
-- **托盘设置**：支持暂停提示、显示内容预览、开机自启动和高级材质开关。提示卡片不抢占焦点，也不阻挡鼠标操作。
+```powershell
+pwsh ./build.ps1
+```
 
-## 为什么做这个工具
+运行单元测试与架构边界检查：
 
-许多应用在执行复制后，没有明显的视觉提示。为了确认复制成功，人们有时会重复按下 Ctrl+C。
+```powershell
+dotnet test Cccc.sln -c Debug --nologo
+```
 
-Cccc 为这一步补充反馈：显示复制结果，提供简短的内容预览，并记录连续复制次数。它不保存剪贴板历史，也不上传复制内容。
+或通过构建脚本执行完整质量与表现层验证：
 
-## 外观与日常使用
+```powershell
+pwsh ./build.ps1 -CheckQuality
+```
 
-<table>
-  <tr><th>浅色</th><th>深色</th></tr>
-  <tr>
-    <td><img src="docs/media/light.png" alt="Cccc 浅色卡片与内容预览提示" width="480"></td>
-    <td><img src="docs/media/dark.png" alt="Cccc 深色卡片与重复复制计数" width="480"></td>
-  </tr>
-</table>
-
-Cccc 提供浅色和深色外观，使用连续圆角、Acrylic 背景和淡入淡出动画。文字采用四倍采样绘制，以改善小字号的显示效果。
-
-高级材质可以关闭。系统设置或运行环境不支持材质效果时，程序会使用普通背景，复制提示仍可正常使用。
-
-## 开始使用
-
-在[发行页面](https://github.com/hakanasora/CCCC/releases)查看可用版本。自行构建的方法见[构建指南](docs/building.md)。
-
-2.5.0 首次运行默认使用普通卡片并开启开机自启动。托盘菜单的“提示样式”可切换到实验性的任务栏单行提示，空间不足或自动隐藏时可能遮挡图标或显示在任务栏上方。详见 [2.5.0 说明](docs/releases/v2.5.0.md)。
-
-构建后运行输出目录中的 `Cccc.exe`（需保留同目录的 DLL），然后照常复制即可。右键托盘图标，可以调整以下选项：
-
-- 暂停提示
-- 显示内容预览
-- 开机自启动
-- 高级材质
-
-两种提示样式共用“高级材质”开关。普通卡片可显示完整的内容预览。升级前请先从托盘退出正在运行的 Cccc。
-
-程序适用于 Windows x64，需要 .NET 10 Desktop Runtime（x64）。构建输出为包含 `Cccc.exe` 和依赖 DLL 的文件夹，发布时以文件夹或 zip 分发；使用 self-contained 发布文件夹时无需另装运行时。字体在构建时嵌入，运行时无需安装字体。
+> `build.ps1` 另支持 `-CheckAnimation`、`-CheckTaskbar`、`-CheckMaterial` 与 `-CheckShape` 验证参数。构建完成后，直接运行 `artifacts/build/Cccc.exe`（需保留同目录依赖文件）即可使用。
 
 ## 卸载与清理
 
-Cccc 以绿色文件夹分发，不写入程序目录以外的可执行文件，但会留下两处系统痕迹：
+程序在运行目录之外仅写入以下两处用户级数据：
 
-- `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 中的 `Sandlada.Cccc` 值（开机自启动，默认关闭，可在托盘中开启）
-- `%LocalAppData%\Sandlada.Cccc` 中的设置文件
+- 注册表自启动项：`HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 下的 `Sandlada.Cccc`
+- 配置目录：`%LocalAppData%\Sandlada.Cccc`
 
-仅删除程序文件夹不会移除这两项，之后登录 Windows 时可能尝试启动已经不存在的位置。请使用下列任一方式卸载：
+可通过以下任一方式完成清理（程序目录需手动删除）：
 
-1. 右键托盘图标，选择“卸载 Cccc…”。确认后程序会移除开机自启动和设置文件并退出，程序文件夹需要自行删除。
-2. 退出 Cccc 后运行 `Cccc.exe --uninstall` 静默清理。返回码 `0` 表示完成，`1` 表示有项目未能移除，`2` 表示 Cccc 仍在运行。
-3. 开发机可运行 `pwsh ./build.ps1 -Uninstall`，结束正在运行的 Cccc、清理上述系统痕迹和 `artifacts/build`；再加上 `-Deep` 会一并清理各项目的 `bin`、`obj` 目录。
+1. **托盘卸载**：右键系统托盘图标，选择“卸载 Cccc…”，确认后程序将移除自启动项与配置目录并自动退出。
+2. **命令行卸载**：退出运行中的实例后执行 `Cccc.exe --uninstall`（返回码：`0` 表示成功，`1` 表示部分项目清理失败，`2` 表示仍有实例正在运行）。
+3. **脚本清理**：执行 `pwsh ./build.ps1 -Uninstall` 停止运行中的实例并清理上述系统痕迹与 `artifacts/build/`；附加 `-Deep` 参数可一并清理各项目的 `bin` 与 `obj` 目录。
 
-## 项目与许可
+## 开源许可
 
-项目代码采用 [MIT License](LICENSE)。
-
-卡片文字默认使用 Noto Sans 系列回退链（`Noto Sans, Noto Sans SC, Noto Sans TC, Noto Sans JP, Noto Sans KR` 并回退到系统 UI 字体），也可在个性化设置中自定义任意系统字体；计数器使用系统字体 Bahnschrift。详见[字体与第三方说明](docs/third-party.md)。
-
-[2.4.6 历史使用方法](docs/usage-v2.4.6.txt)、[构建步骤](docs/building.md)和[2.4.6 历史设计参数](docs/design-v2.4.6.json)见仓库中的相关文档。
+本项目采用 [MIT License](LICENSE) 许可协议。
